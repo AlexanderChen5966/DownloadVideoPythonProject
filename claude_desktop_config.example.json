@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "media-downloader": {
+      "command": "/Users/alexander/PycharmProjects/DownloadVideoPythonProject/.venv/bin/python",
+      "args": [
+        "/Users/alexander/PycharmProjects/DownloadVideoPythonProject/server.py"
+      ]
+    }
+  }
+}

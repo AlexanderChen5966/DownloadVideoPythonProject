@@ -1,0 +1,22 @@
+# FastMCP 2.0 - 主要 MCP 框架
+fastmcp>=2.0.0
+
+# 系統工具不需要安裝，但需要確保已安裝：
+# - yt-dlp: 用於下載 YouTube 影片（需要用 pip 或 brew 安裝）
+# - ffmpeg: 用於音視頻轉檔（需要用 brew/apt/choco 安裝）
+
+# 媒體下載與處理
+yt-dlp>=2024.0.0
+
+# 圖片處理套件
+Pillow>=10.0.0
+requests>=2.31.0
+
+# RSS Feed 解析套件
+feedparser>=6.0.0
+
+# HLS 下載器套件
+m3u8>=3.5.0
+
+# CLI 進度條套件（選用）
+tqdm>=4.65.0

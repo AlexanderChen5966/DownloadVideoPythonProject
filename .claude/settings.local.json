@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile:*)",
+      "Bash(tree:*)",
+      "Bash(/Users/alexander/PycharmProjects/DownloadVideoPythonProject/.venv/bin/yt-dlp:*)",
+      "Bash(.venv/bin/yt-dlp:*)",
+      "Bash(python:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "outputStyle": "default"
+}

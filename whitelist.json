@@ -1,0 +1,22 @@
+{
+  "enabled": true,
+  "rules": [
+    "youtube.com",
+    "*.youtube.com",
+    "youtu.be",
+    "*.googlevideo.com",
+    "podcasts.apple.com",
+    "*.podbean.com",
+    "*.buzzsprout.com",
+    "*.libsyn.com",
+    "*.soundcloud.com",
+    "*.spotify.com",
+    "*.top945.com.tw",
+    "www.eggotogo.com",
+    "open.firstory.me",
+    "*.podcast.app",
+    "podcast.app",
+    "*.kimy.com.tw",
+    "media.kimy.com.tw"
+  ]
+}
