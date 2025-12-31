@@ -4,6 +4,63 @@
 
 ## 🔔 最近更新
 
+### 2025-12-31：v2.0 混合架構 - 同時支援 Claude Desktop 和 Claude Code
+
+**重大變更**：
+- ✅ 採用 **混合架構**：網路操作使用 MCP，本地操作使用 Skills
+- ✅ MCP Server 增加至 **9 個工具**（新增 2 個網路下載工具）
+- ✅ Skills 包含 **4 個本地處理腳本**
+- ✅ 同時支援 Claude Desktop 和 Claude Code，發揮各自優勢
+- ✅ 解決 Skills 在 Claude Desktop 的網路限制問題
+
+**🎯 混合架構說明**：
+```
+┌─────────────────────────────────────────────────────┐
+│              Media Processing System                │
+└─────────────────────────────────────────────────────┘
+
+網路操作 (MCP Tools - 9個)        本地操作 (Skills - 4個)
+━━━━━━━━━━━━━━━━━━━━━━━         ━━━━━━━━━━━━━━━━━━━━━
+🌐 download_and_convert_image      ✨ convert_audio.py
+🌐 download_direct                 ✨ batch_convert.py
+🌐 download_media                  ✨ extract_audio.py
+🌐 download_hls_tool               ✨ compress_media.py
+🌐 podcast_downloader
+🌐 whitelist_add_rule
+🌐 whitelist_remove_rule
+🌐 whitelist_list_rules
+🌐 whitelist_set_enabled
+
+系統命令替代
+━━━━━━━━━━━━━━━━━━━━━━━
+⚙️ mkdir -p              (建立目錄)
+⚙️ ls -lah               (列出檔案)
+⚙️ open/xdg-open         (開啟檔案)
+```
+
+**💡 為什麼採用混合架構？**
+| 操作類型 | 使用工具 | 原因 |
+|---------|---------|------|
+| 下載網路圖片 | MCP | Skills 在 Claude Desktop 中網路受限 |
+| 下載網路音檔 | MCP | 需要網路訪問權限 |
+| 轉換本地音檔 | Skills | 本地操作更快，無需 MCP 伺服器 |
+| 批次轉換檔案 | Skills | 本地操作更高效 |
+| YouTube 下載 | MCP | 複雜邏輯 + 網路訪問 |
+
+**遷移指南**：
+- ✅ **網路下載**：使用 MCP 工具（download_and_convert_image, download_direct）
+- ✅ **本地處理**：使用 Skills 腳本（轉換、批次、提取、壓縮）
+- ✅ **YouTube/HLS/Podcast**：繼續使用 MCP 工具
+- ✅ **檔案管理**：使用系統命令
+
+詳細說明請參考：
+- [Skills 文檔](./.claude/skills/media-processor/SKILL.md) - 混合架構使用指南
+- [MCP 工具文檔](#-功能特色) - MCP 工具說明
+
+---
+
+## 🔔 最近更新 (歷史記錄)
+
 ### 2025-12-10：MCP Server 路徑問題修復
 
 **修復的問題**：

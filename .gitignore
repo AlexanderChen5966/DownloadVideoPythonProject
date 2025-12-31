@@ -77,3 +77,7 @@ $RECYCLE.BIN/
 *.temp
 *.bak
 *.swp
+
+# Claude Code settings
+.claude/settings.local.json
+.claude/.DS_Store

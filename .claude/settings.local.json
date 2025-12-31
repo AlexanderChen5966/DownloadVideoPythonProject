@@ -5,7 +5,15 @@
       "Bash(tree:*)",
       "Bash(/Users/alexander/PycharmProjects/DownloadVideoPythonProject/.venv/bin/yt-dlp:*)",
       "Bash(.venv/bin/yt-dlp:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:support.claude.com)",
+      "Bash(unzip:*)",
+      "Bash(find:*)",
+      "Bash(COPYFILE_DISABLE=1 zip:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
