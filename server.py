@@ -73,7 +73,12 @@ async def download_media(
         try:
             # 建立 yt-dlp 指令（使用虛擬環境中的完整路徑）
             yt_dlp_path = "/Users/alexander/PycharmProjects/DownloadVideoPythonProject/.venv/bin/yt-dlp"
-            cmd = [yt_dlp_path, "-o", f"{output_dir}/%(title)s.%(ext)s"]
+            cmd = [
+                yt_dlp_path,
+                "--js-runtimes", "node:/opt/homebrew/bin/node",
+                "--remote-components", "ejs:github",
+                "-o", f"{output_dir}/%(title)s.%(ext)s"
+            ]
 
             if format == "audio":
                 cmd.extend(["--extract-audio", "--audio-format", "best", "--audio-quality", "0"])

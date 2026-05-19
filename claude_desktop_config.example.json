@@ -1,9 +1,9 @@
 {
   "mcpServers": {
     "media-downloader": {
-      "command": "/Users/alexander/PycharmProjects/DownloadVideoPythonProject/.venv/bin/python",
+      "command": "/bin/bash",
       "args": [
-        "/Users/alexander/PycharmProjects/DownloadVideoPythonProject/server.py"
+        "/Users/你的用戶名/PycharmProjects/DownloadVideoPythonProject/start_mcp.sh"
       ]
     }
   }
