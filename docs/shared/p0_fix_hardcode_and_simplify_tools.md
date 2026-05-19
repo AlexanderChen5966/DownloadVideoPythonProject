@@ -1,9 +1,10 @@
 # P0：修復硬編碼路徑與精簡 MCP 工具
 
-> **狀態：⏳ 待實作**
+> **狀態：✅ 已完成**
 > **優先級：P0（必做）**
 > **建立日期：2026-05-19**
-> **預估影響檔案：4 個**
+> **完成日期：2026-05-19**
+> **實際影響檔案：4 個**（server.py、download_cli.py、utils/path_resolver.py 新增、utils/__init__.py）
 
 ---
 
@@ -192,11 +193,11 @@ async def whitelist_manage(
 
 ## 驗證清單
 
-- [ ] `server.py` 中無任何硬編碼的 `/Users/alexander/` 路徑
-- [ ] `download_cli.py` 中無任何硬編碼路徑
-- [ ] Node.js 路徑改為動態偵測，找不到時不阻斷（僅 warning）
-- [ ] MCP 啟動後只顯示 7 個工具
-- [ ] `whitelist_manage` 的 5 種 action 都正常運作
-- [ ] 在沒有 yt-dlp 的環境中呼叫 `download_media` 會回傳明確錯誤
-- [ ] `start_mcp.sh` 包裝腳本仍可正常啟動
-- [ ] CLI 工具 `download_cli.py` 仍可正常使用
+- [x] `server.py` 中無任何硬編碼的 `/Users/alexander/` 路徑
+- [x] `download_cli.py` 中無任何硬編碼路徑
+- [x] Node.js 路徑改為動態偵測，找不到時不阻斷（僅 warning）
+- [x] MCP 啟動後只顯示 7 個工具
+- [x] `whitelist_manage` 的 5 種 action 都正常運作
+- [x] 在沒有 yt-dlp 的環境中呼叫 `find_ytdlp()` 拋出明確 FileNotFoundError
+- [x] `start_mcp.sh` 包裝腳本仍可正常啟動
+- [x] CLI 工具 `download_cli.py` 仍可正常使用

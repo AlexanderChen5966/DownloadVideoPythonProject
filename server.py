@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
 多媒體下載與轉檔 MCP 伺服器
-提供 YouTube 下載、圖片下載與轉檔、格式轉換、檔案管理和應用程式啟動功能
+提供 YouTube 下載、圖片下載與轉檔、格式轉換和應用程式啟動功能
 """
 
 import os
 import subprocess
-import platform
 import time
 from pathlib import Path
 from typing import Literal
@@ -22,6 +21,9 @@ from utils.audio_downloader import download_audio_direct
 
 # 導入白名單驗證器
 from utils.whitelist_validator import get_validator
+
+# 導入路徑偵測工具
+from utils.path_resolver import find_ytdlp, find_node
 
 # 初始化 FastMCP 伺服器
 mcp = FastMCP("media-downloader")
@@ -71,14 +73,16 @@ async def download_media(
             continue
 
         try:
-            # 建立 yt-dlp 指令（使用虛擬環境中的完整路徑）
-            yt_dlp_path = "/Users/alexander/PycharmProjects/DownloadVideoPythonProject/.venv/bin/yt-dlp"
+            # 建立 yt-dlp 指令（動態偵測路徑）
+            yt_dlp_path = find_ytdlp()
+            node_path = find_node()
             cmd = [
                 yt_dlp_path,
-                "--js-runtimes", "node:/opt/homebrew/bin/node",
                 "--remote-components", "ejs:github",
                 "-o", f"{output_dir}/%(title)s.%(ext)s"
             ]
+            if node_path:
+                cmd[1:1] = ["--js-runtimes", f"node:{node_path}"]
 
             if format == "audio":
                 cmd.extend(["--extract-audio", "--audio-format", "best", "--audio-quality", "0"])
@@ -199,140 +203,6 @@ async def convert_to_mp3(
             "success": False,
             "error": str(e),
             "stderr": e.stderr
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-
-@mcp.tool()
-async def ensure_directory(path: str) -> dict:
-    """
-    確保指定的目錄存在，如不存在則建立
-
-    Args:
-        path: 要建立或確認的目錄路徑
-
-    Returns:
-        操作結果字典，包含絕對路徑和存在狀態
-    """
-    try:
-        os.makedirs(path, exist_ok=True)
-        return {
-            "success": True,
-            "path": path,
-            "absolute_path": os.path.abspath(path),
-            "exists": True
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "path": path,
-            "error": str(e)
-        }
-
-
-@mcp.tool()
-async def list_files(path: str, filter: str = None) -> dict:
-    """
-    列出指定目錄中的所有檔案和子目錄
-
-    Args:
-        path: 要列出內容的目錄路徑
-        filter: 檔案副檔名過濾器（例如：.mp3, .mp4）
-
-    Returns:
-        目錄內容字典，包含檔案列表、子目錄列表和統計資訊
-    """
-    try:
-        if not os.path.exists(path):
-            return {
-                "success": False,
-                "error": f"路徑不存在: {path}"
-            }
-
-        if not os.path.isdir(path):
-            return {
-                "success": False,
-                "error": f"路徑不是目錄: {path}"
-            }
-
-        # 列出所有檔案
-        all_items = os.listdir(path)
-
-        files = []
-        directories = []
-
-        for item in all_items:
-            item_path = os.path.join(path, item)
-
-            if os.path.isdir(item_path):
-                directories.append(item)
-            else:
-                # 如果有過濾器，只加入符合的檔案
-                if filter is None or item.endswith(filter):
-                    file_info = {
-                        "name": item,
-                        "size": os.path.getsize(item_path),
-                        "modified": os.path.getmtime(item_path)
-                    }
-                    files.append(file_info)
-
-        return {
-            "success": True,
-            "path": path,
-            "total_files": len(files),
-            "total_directories": len(directories),
-            "files": files,
-            "directories": directories
-        }
-
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-
-@mcp.tool()
-async def open_file(path: str) -> dict:
-    """
-    使用系統預設應用程式開啟檔案或資料夾（支援 macOS、Windows、Linux）
-
-    Args:
-        path: 要開啟的檔案或資料夾路徑
-
-    Returns:
-        操作結果字典，包含路徑和平台資訊
-    """
-    try:
-        if not os.path.exists(path):
-            return {
-                "success": False,
-                "error": f"路徑不存在: {path}"
-            }
-
-        system = platform.system()
-
-        if system == "Darwin":  # macOS
-            subprocess.run(["open", path], check=True)
-        elif system == "Windows":
-            subprocess.run(["start", path], shell=True, check=True)
-        else:  # Linux
-            subprocess.run(["xdg-open", path], check=True)
-
-        return {
-            "success": True,
-            "path": path,
-            "platform": system
-        }
-
-    except subprocess.CalledProcessError as e:
-        return {
-            "success": False,
-            "error": str(e)
         }
     except Exception as e:
         return {
@@ -478,105 +348,61 @@ async def download_hls_tool(
 
 
 @mcp.tool()
-async def whitelist_add_rule(rule: str) -> dict:
+async def whitelist_manage(
+    action: Literal["list", "add", "remove", "enable", "disable"],
+    rule: str | None = None
+) -> dict:
     """
-    新增規則到網路白名單（支援完整網域、萬用字元、正則表達式）
+    管理網路白名單（查詢、新增、移除規則，啟用/停用）
 
     Args:
-        rule: 白名單規則，例如: 'example.com', '*.example.com', '^https?://.*\\.example\\.com/.*'
-
-    Returns:
-        操作結果字典
+        action: 操作類型
+            - 'list': 列出所有規則和狀態
+            - 'add': 新增規則（需提供 rule），支援完整網域、萬用字元、正則
+            - 'remove': 移除規則（需提供 rule）
+            - 'enable': 啟用白名單
+            - 'disable': 停用白名單
+        rule: 白名單規則（action 為 add/remove 時必填）
+              範例：'example.com', '*.example.com', '^https?://.*\\.example\\.com/.*'
     """
     try:
         validator = get_validator()
-        success, message = validator.add_rule(rule)
-        return {
-            "success": success,
-            "message": message,
-            "rule": rule
-        }
+
+        if action == "list":
+            rules = validator.list_rules()
+            return {
+                "success": True,
+                "enabled": validator.enabled,
+                "total_rules": len(rules),
+                "rules": rules
+            }
+
+        if action in ("add", "remove") and not rule:
+            return {
+                "success": False,
+                "error": f"action='{action}' 時必須提供 rule 參數"
+            }
+
+        if action == "add":
+            success, message = validator.add_rule(rule)
+            return {"success": success, "message": message, "rule": rule}
+
+        if action == "remove":
+            success, message = validator.remove_rule(rule)
+            return {"success": success, "message": message, "rule": rule}
+
+        if action == "enable":
+            success, message = validator.set_enabled(True)
+            return {"success": success, "message": message, "enabled": True}
+
+        if action == "disable":
+            success, message = validator.set_enabled(False)
+            return {"success": success, "message": message, "enabled": False}
+
+        return {"success": False, "error": f"未知的 action: {action}"}
+
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-
-@mcp.tool()
-async def whitelist_remove_rule(rule: str) -> dict:
-    """
-    從網路白名單中移除規則
-
-    Args:
-        rule: 要移除的白名單規則
-
-    Returns:
-        操作結果字典
-    """
-    try:
-        validator = get_validator()
-        success, message = validator.remove_rule(rule)
-        return {
-            "success": success,
-            "message": message,
-            "rule": rule
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-
-@mcp.tool()
-async def whitelist_list_rules() -> dict:
-    """
-    列出所有網路白名單規則和狀態
-
-    Returns:
-        白名單規則列表和狀態字典
-    """
-    try:
-        validator = get_validator()
-        rules = validator.list_rules()
-        return {
-            "success": True,
-            "enabled": validator.enabled,
-            "total_rules": len(rules),
-            "rules": rules
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-
-@mcp.tool()
-async def whitelist_set_enabled(enabled: bool) -> dict:
-    """
-    啟用或停用網路白名單功能
-
-    Args:
-        enabled: true 啟用白名單，false 停用白名單
-
-    Returns:
-        操作結果字典
-    """
-    try:
-        validator = get_validator()
-        success, message = validator.set_enabled(enabled)
-        return {
-            "success": success,
-            "message": message,
-            "enabled": enabled
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 @mcp.tool()

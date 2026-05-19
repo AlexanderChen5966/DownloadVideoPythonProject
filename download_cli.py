@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from utils.audio_downloader import download_audio_direct
+from utils.path_resolver import find_ytdlp, find_node
 
 
 def needs_ytdlp(url: str) -> bool:
@@ -83,11 +84,15 @@ async def download_with_ytdlp(url: str, output_dir: str, format: str = "mp3") ->
         # 確保目錄存在
         os.makedirs(output_dir, exist_ok=True)
 
-        # 建立 yt-dlp 指令
+        # 建立 yt-dlp 指令（動態偵測路徑）
+        yt_dlp_path = find_ytdlp()
+        node_path = find_node()
         cmd = [
-            "yt-dlp",
+            yt_dlp_path,
             "-o", f"{output_dir}/%(title)s.%(ext)s"
         ]
+        if node_path:
+            cmd[1:1] = ["--js-runtimes", f"node:{node_path}"]
 
         # 根據格式添加參數
         if format == "mp3":
