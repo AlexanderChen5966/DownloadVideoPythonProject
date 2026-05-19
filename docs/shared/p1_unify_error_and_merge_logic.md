@@ -1,9 +1,10 @@
 # P1：統一錯誤回傳結構、合併重複邏輯、修復 SSL
 
-> **狀態：⏳ 待實作**
+> **狀態：✅ 已完成**
 > **優先級：P1（重要）**
 > **建立日期：2026-05-19**
-> **預估影響檔案：4 個**
+> **完成日期：2026-05-19**
+> **實際影響檔案：5 個**（server.py、utils/audio_downloader.py、tools/podcast_downloader.py、utils/response.py 新增、utils/path_resolver.py）
 > **前置依賴：P0 完成後再做**
 
 ---
@@ -148,10 +149,10 @@ return error_response("FILE_NOT_FOUND", f"輸入檔案不存在: {input_file}", 
 
 ## 驗證清單
 
-- [ ] 所有工具的失敗回傳都包含 `error_code` 欄位
-- [ ] `podcast_downloader.py` 中不再有 `_download_audio_file` 和 `_get_audio_extension`
-- [ ] `audio_downloader.py` 無全域 SSL 警告抑制
-- [ ] SSL 正常的網站：verify=True 通過
-- [ ] SSL 異常的網站：自動 fallback 到 verify=False 並成功下載
-- [ ] MCP 所有工具仍可正常呼叫
-- [ ] CLI 工具仍可正常使用
+- [x] 所有工具的失敗回傳都包含 `error_code` 欄位（舊格式剩餘 0 個）
+- [x] `podcast_downloader.py` 中不再有 `_download_audio_file` 和 `_get_audio_extension`
+- [x] `audio_downloader.py` 無全域 SSL 警告抑制，改用 `_safe_request` fallback
+- [x] SSL fallback 邏輯：先 verify=True，SSLError 時自動重試 verify=False
+- [x] MCP 啟動正常，7 個工具全數載入
+- [x] CLI 工具 `download_cli.py` 正常運作
+- [x] `WHITELIST_DENIED` error_code 回傳結構驗證通過

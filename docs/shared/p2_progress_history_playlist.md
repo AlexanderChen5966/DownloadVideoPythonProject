@@ -1,9 +1,10 @@
 # P2：下載進度回報、歷史紀錄、播放清單支援
 
-> **狀態：⏳ 待實作**
+> **狀態：✅ 已完成**
 > **優先級：P2（加值）**
 > **建立日期：2026-05-19**
-> **預估影響檔案：4 個**
+> **完成日期：2026-05-19**
+> **實際影響檔案：3 個**（server.py、utils/download_history.py 新增、.gitignore）
 > **前置依賴：P0 + P1 完成後再做**
 
 ---
@@ -186,10 +187,10 @@ download_history.json
 
 ## 驗證清單
 
-- [ ] 下載多個 URL 時，Agent 能收到進度通知
-- [ ] 重複下載相同 URL 時，顯示 `skipped` 且不重新下載
-- [ ] 已下載但檔案已刪除時，重新下載而非跳過
-- [ ] YouTube playlist URL 能一次下載整個清單
-- [ ] `download_history.json` 已加入 `.gitignore`
-- [ ] 歷史紀錄超過 500 筆時自動清理舊紀錄
-- [ ] 單一 URL 下載仍正常運作（不受 playlist 改動影響）
+- [x] 下載多個 URL 時，Agent 能收到進度通知
+- [x] 重複下載相同 URL 時，顯示 `skipped` 且不重新下載
+- [x] 已下載但檔案已刪除時，重新下載而非跳過
+- [x] YouTube playlist URL 能一次下載整個清單
+- [x] `download_history.json` 已加入 `.gitignore`
+- [x] 歷史紀錄超過 500 筆時自動清理舊紀錄
+- [x] 單一 URL 下載仍正常運作（不受 playlist 改動影響）

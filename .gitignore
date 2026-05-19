@@ -78,6 +78,7 @@ $RECYCLE.BIN/
 *.bak
 *.swp
 temp_data.json
+download_history.json
 
 # Claude Code settings
 .claude/settings.local.json

@@ -12,7 +12,7 @@ from typing import Literal
 
 import requests
 from PIL import Image
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 
 # 導入工具模組
 from tools.podcast_downloader import download_podcast
@@ -25,6 +25,12 @@ from utils.whitelist_validator import get_validator
 # 導入路徑偵測工具
 from utils.path_resolver import find_ytdlp, find_node
 
+# 導入統一回傳結構
+from utils.response import success_response, error_response
+
+# 導入下載歷史紀錄
+from utils.download_history import is_downloaded, add_record
+
 # 初始化 FastMCP 伺服器
 mcp = FastMCP("media-downloader")
 
@@ -33,13 +39,15 @@ mcp = FastMCP("media-downloader")
 async def download_media(
     urls: list[str],
     output_dir: str = "./downloads",
-    format: Literal["audio", "video", "best", "mp4", "mp3", "webm"] = "audio"
+    format: Literal["audio", "video", "best", "mp4", "mp3", "webm"] = "audio",
+    ctx: Context = None
 ) -> dict:
     """
     使用 yt-dlp 下載 YouTube 影片或音檔，支援批量下載多個 URL
 
     Args:
-        urls: 要下載的媒體 URL 列表（支援 YouTube、Podcast 等）
+        urls: 要下載的媒體 URL 列表
+              支援單一影片、播放清單（playlist）、頻道 URL
         output_dir: 下載檔案的輸出目錄路徑
         format: 下載格式
             - 'audio': 僅音檔（自動選擇最佳音頻格式）
@@ -50,36 +58,56 @@ async def download_media(
             - 'webm': WebM 視頻格式
 
     Returns:
-        包含下載結果的字典，含成功/失敗數量、檔案列表和錯誤資訊
+        包含下載結果的字典，含成功/失敗/跳過數量、檔案列表和錯誤資訊
     """
-    # 確保輸出目錄存在
     os.makedirs(output_dir, exist_ok=True)
 
     saved_files = []
+    skipped_files = []
     errors = []
+    total = len(urls)
 
-    # 取得白名單驗證器
     validator = get_validator()
 
-    for url in urls:
+    for i, url in enumerate(urls):
+        if ctx:
+            await ctx.report_progress(
+                progress=i,
+                total=total,
+                message=f"下載中 ({i + 1}/{total}): {url[:60]}"
+            )
+
         # 白名單檢查
         is_allowed, message = validator.validate(url)
         if not is_allowed:
-            errors.append({
+            errors.append({"url": url, "error_code": "WHITELIST_DENIED", "error": message})
+            continue
+
+        # 歷史紀錄查詢：檔案存在則跳過
+        existing = is_downloaded(url)
+        if existing:
+            skipped_files.append({
                 "url": url,
-                "error": "白名單驗證失敗",
-                "message": message
+                "status": "skipped",
+                "reason": "already_downloaded",
+                "file_path": existing["file_path"]
             })
             continue
 
         try:
-            # 建立 yt-dlp 指令（動態偵測路徑）
-            yt_dlp_path = find_ytdlp()
+            try:
+                yt_dlp_path = find_ytdlp()
+            except FileNotFoundError as e:
+                errors.append({"url": url, "error_code": "YTDLP_NOT_FOUND", "error": str(e)})
+                continue
+
             node_path = find_node()
             cmd = [
                 yt_dlp_path,
                 "--remote-components", "ejs:github",
-                "-o", f"{output_dir}/%(title)s.%(ext)s"
+                "--yes-playlist",
+                "-o", f"{output_dir}/%(title)s.%(ext)s",
+                "--print", "after_move:filepath"
             ]
             if node_path:
                 cmd[1:1] = ["--js-runtimes", f"node:{node_path}"]
@@ -99,37 +127,38 @@ async def download_media(
 
             cmd.append(url)
 
-            # 執行下載
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
 
-            # 取得下載的檔案資訊
+            # 從 --print after_move:filepath 取得實際儲存路徑
+            file_paths = [p.strip() for p in result.stdout.strip().splitlines() if p.strip()]
+            for file_path in file_paths:
+                file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+                add_record(url, file_path, file_size, success=True)
+
             saved_files.append({
                 "url": url,
                 "status": "success",
-                "output": result.stdout
+                "files": file_paths
             })
 
         except subprocess.CalledProcessError as e:
-            errors.append({
-                "url": url,
-                "error": str(e),
-                "stderr": e.stderr
-            })
+            errors.append({"url": url, "error_code": "YTDLP_FAILED", "error": str(e), "stderr": e.stderr})
         except Exception as e:
-            errors.append({
-                "url": url,
-                "error": str(e)
-            })
+            errors.append({"url": url, "error_code": "UNKNOWN_ERROR", "error": str(e)})
+
+    if ctx:
+        await ctx.report_progress(
+            progress=total,
+            total=total,
+            message="全部下載完成"
+        )
 
     return {
         "success": len(saved_files),
+        "skipped": len(skipped_files),
         "failed": len(errors),
         "saved_files": saved_files,
+        "skipped_files": skipped_files,
         "errors": errors,
         "output_dir": output_dir
     }
@@ -152,63 +181,33 @@ async def convert_to_mp3(
     Returns:
         轉換結果字典，包含成功狀態、檔案路徑和檔案大小
     """
-    # 檢查輸入檔案是否存在
     if not os.path.exists(input_file):
-        return {"success": False, "error": f"輸入檔案不存在: {input_file}"}
+        return error_response("FILE_NOT_FOUND", f"輸入檔案不存在: {input_file}", input_file=input_file)
 
-    # 如果沒有指定輸出檔案，自動生成
     if output_file is None:
-        input_path = Path(input_file)
-        output_file = str(input_path.with_suffix('.mp3'))
+        output_file = str(Path(input_file).with_suffix('.mp3'))
 
-    # 如果輸入已經是 MP3，可以選擇跳過或重新編碼
     if input_file.lower().endswith('.mp3') and input_file == output_file:
-        return {
-            "success": True,
-            "message": "檔案已經是 MP3 格式",
-            "input_file": input_file,
-            "output_file": output_file
-        }
+        return success_response(message="檔案已經是 MP3 格式", input_file=input_file, output_file=output_file)
 
     try:
-        # 建立 ffmpeg 指令
         cmd = [
-            "ffmpeg",
-            "-i", input_file,
-            "-vn",  # 不處理視訊
-            "-codec:a", "libmp3lame",
-            "-qscale:a", str(quality),
-            "-y",  # 覆蓋現有檔案
+            "ffmpeg", "-i", input_file,
+            "-vn", "-codec:a", "libmp3lame",
+            "-qscale:a", str(quality), "-y",
             output_file
         ]
-
-        # 執行轉換
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return success_response(
+            input_file=input_file,
+            output_file=output_file,
+            quality=quality,
+            file_size=os.path.getsize(output_file)
         )
-
-        return {
-            "success": True,
-            "input_file": input_file,
-            "output_file": output_file,
-            "quality": quality,
-            "file_size": os.path.getsize(output_file)
-        }
-
     except subprocess.CalledProcessError as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "stderr": e.stderr
-        }
+        return error_response("CONVERSION_FAILED", str(e), stderr=e.stderr)
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return error_response("UNKNOWN_ERROR", str(e))
 
 
 @mcp.tool()
@@ -224,85 +223,51 @@ async def download_and_convert_image(url: str, filename: str = None) -> dict:
         下載結果字典，包含儲存路徑、原始格式、檔案大小和尺寸
     """
     try:
-        # 1. 檢查 URL 是否為 HTTP/HTTPS
         if not url.startswith(('http://', 'https://')):
-            return {
-                "success": False,
-                "error": "URL 必須是 HTTP 或 HTTPS 協議"
-            }
+            return error_response("INVALID_URL", "URL 必須是 HTTP 或 HTTPS 協議", url=url)
 
-        # 2. 白名單檢查
         validator = get_validator()
         is_allowed, message = validator.validate(url)
         if not is_allowed:
-            return {
-                "success": False,
-                "error": "白名單驗證失敗",
-                "message": message
-            }
+            return error_response("WHITELIST_DENIED", message, url=url)
 
-        # 3. 下載圖片 headers 檢查 Content-Type
         response = requests.head(url, timeout=10, allow_redirects=True)
         content_type = response.headers.get('Content-Type', '')
-
-        # 3. 檢查 Content-Type 是否為 image/*
         if not content_type.startswith('image/'):
-            return {
-                "success": False,
-                "error": f"URL 不是圖片檔案，Content-Type: {content_type}"
-            }
+            return error_response(
+                "INVALID_CONTENT_TYPE",
+                f"URL 不是圖片檔案，Content-Type: {content_type}",
+                url=url, content_type=content_type
+            )
 
-        # 記錄原始格式
         original_format = content_type.split('/')[-1].split(';')[0]
-
-        # 4. 下載圖片內容
         response = requests.get(url, timeout=30)
         response.raise_for_status()
 
-        # 5. 使用 Pillow 開啟圖片
         from io import BytesIO
-        image_data = BytesIO(response.content)
-        img = Image.open(image_data)
-
-        # 6. 轉換為 RGB（處理 RGBA、灰階等格式）
+        img = Image.open(BytesIO(response.content))
         if img.mode != 'RGB':
             img = img.convert('RGB')
 
-        # 7. 生成檔名
         if filename is None:
-            # 使用 timestamp 自動產生檔名
-            timestamp = int(time.time() * 1000)
-            filename = f"image_{timestamp}"
+            filename = f"image_{int(time.time() * 1000)}"
 
-        # 8. 確保 images 目錄存在並儲存
-        project_root = os.path.dirname(os.path.abspath(__file__))
-        images_dir = os.path.join(project_root, "images")
+        images_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
         os.makedirs(images_dir, exist_ok=True)
-
         output_path = os.path.join(images_dir, f"{filename}.jpg")
-
-        # 儲存為 JPG
         img.save(output_path, 'JPEG', quality=95)
 
-        # 9. 回傳結果
-        return {
-            "success": True,
-            "saved_path": output_path,
-            "original_format": original_format,
-            "file_size": os.path.getsize(output_path),
-            "dimensions": f"{img.width}x{img.height}"
-        }
+        return success_response(
+            saved_path=output_path,
+            original_format=original_format,
+            file_size=os.path.getsize(output_path),
+            dimensions=f"{img.width}x{img.height}"
+        )
 
     except requests.exceptions.RequestException as e:
-        return {
-            "success": False,
-            "error": f"下載失敗: {str(e)}"
-        }
+        return error_response("DOWNLOAD_FAILED", f"下載失敗: {e}", url=url)
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"處理圖片時發生錯誤: {str(e)}"
-        }
+        return error_response("UNKNOWN_ERROR", f"處理圖片時發生錯誤: {e}", url=url)
 
 
 @mcp.tool()
@@ -378,10 +343,7 @@ async def whitelist_manage(
             }
 
         if action in ("add", "remove") and not rule:
-            return {
-                "success": False,
-                "error": f"action='{action}' 時必須提供 rule 參數"
-            }
+            return error_response("MISSING_PARAM", f"action='{action}' 時必須提供 rule 參數")
 
         if action == "add":
             success, message = validator.add_rule(rule)
@@ -399,10 +361,10 @@ async def whitelist_manage(
             success, message = validator.set_enabled(False)
             return {"success": success, "message": message, "enabled": False}
 
-        return {"success": False, "error": f"未知的 action: {action}"}
+        return error_response("MISSING_PARAM", f"未知的 action: {action}")
 
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return error_response("UNKNOWN_ERROR", str(e))
 
 
 @mcp.tool()
