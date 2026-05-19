@@ -9,7 +9,7 @@
 | [p0_fix_hardcode_and_simplify_tools.md](./p0_fix_hardcode_and_simplify_tools.md) | 修復硬編碼路徑、精簡工具 13→7 | ✅ 已完成 |
 | [p1_unify_error_and_merge_logic.md](./p1_unify_error_and_merge_logic.md) | 統一錯誤結構、合併重複邏輯、修復 SSL | ✅ 已完成 |
 | [p2_progress_history_playlist.md](./p2_progress_history_playlist.md) | 下載進度回報、歷史紀錄、playlist 支援 | ✅ 已完成 |
-| [p3_mcp_resource_prompt_subtitle.md](./p3_mcp_resource_prompt_subtitle.md) | MCP Resource/Prompt、字幕、格式查詢 | ⏳ 待實作 |
+| [p3_mcp_resource_prompt_subtitle.md](./p3_mcp_resource_prompt_subtitle.md) | MCP Resource/Prompt、字幕、格式查詢 | ✅ 已完成 |
 
 ## 執行順序
 
@@ -26,3 +26,4 @@ P0 和 P1 為基礎架構修正，必須按順序完成。P2 和 P3 為功能擴
 | [p0_fix_hardcode_and_simplify_tools.md](./p0_fix_hardcode_and_simplify_tools.md) | 2026-05-19 | 工具 13→7，yt-dlp 路徑動態偵測 |
 | [p1_unify_error_and_merge_logic.md](./p1_unify_error_and_merge_logic.md) | 2026-05-19 | 統一 error_code、SSL fallback、合併重複邏輯 |
 | [p2_progress_history_playlist.md](./p2_progress_history_playlist.md) | 2026-05-19 | 進度回報、下載歷史、playlist 與 --print filepath |
+| [p3_mcp_resource_prompt_subtitle.md](./p3_mcp_resource_prompt_subtitle.md) | 2026-05-19 | 3 Resources、6 Prompts、字幕參數、query_formats 工具 |

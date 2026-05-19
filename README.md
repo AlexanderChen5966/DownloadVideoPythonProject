@@ -1,6 +1,6 @@
 # 多媒體下載與轉檔 MCP Server
 
-> **版本：v3.0.0** | 更新日期：2026-05-19
+> **版本：v4.0.0** | 更新日期：2026-05-19
 
 一個由 Claude AI Agent 透過 MCP（Model Context Protocol）控制的自動化媒體處理系統。
 
@@ -8,60 +8,64 @@
 
 ## 版本紀錄
 
+### v4.0.0（2026-05-19）— 架構全面升級
+
+- **P0**：修復 yt-dlp 硬編碼路徑（動態偵測 venv / PATH），精簡工具 13 → 8 個
+- **P1**：統一回傳結構（error_code 標準化），SSL 驗證改為 fallback 模式，合併重複下載邏輯
+- **P2**：MCP Context 進度回報、下載歷史紀錄（自動跳過已下載）、YouTube Playlist 支援
+- **P3**：新增 3 個 MCP Resources、6 個 Prompt 操作流程、字幕下載、`query_formats` 格式查詢工具
+
 ### v3.0.0（2026-05-19）— 專案整理與自動修復
 
 - 新增 `start_mcp.sh` 啟動包裝腳本，每次啟動自動更新 yt-dlp 並清除快取
-- 更新 Claude Desktop 設定，改用包裝腳本啟動 MCP
-- 歸檔過時檔案（`analyze_json.py`、`batch_download.py`、`temp_data.json`）
-- 整理 `docs/` 目錄，分類為 guides、spec、issues、archive
-- 移除過時的 Skills 混合架構描述（實際未成功運作）
-- 將 `spec/` 搬入 `docs/spec/` 統一管理
-- `temp_data.json` 加入 `.gitignore`
+- 歸檔過時檔案，整理 `docs/` 目錄
 
 ### v2.1.0（2026-03-03）— 修復 YouTube JavaScript Runtime
 
-- 在 yt-dlp 指令加入 `--js-runtimes node:/opt/homebrew/bin/node`
-- 加入 `--remote-components ejs:github` 允許下載官方 JS challenge 解密腳本
+- 加入 `--js-runtimes node:...` 和 `--remote-components ejs:github`
 
 ### v2.0.0（2025-12-31）— MCP Server 大幅升級
 
-- MCP Server 增加至 13 個工具
-- 新增 HLS 串流下載、Podcast RSS 下載、音檔直接下載
-- 新增網路白名單安全機制
-- 同時支援 Claude Desktop 和 Claude Code
+- MCP Server 增加至 13 個工具，新增 HLS / Podcast / 白名單功能
 
 ### v1.0.0（2025-12-10）— 初始版本
 
-- 基礎 YouTube 下載與 MP3 轉換
-- 檔案管理與圖片下載轉換
-- Claude Desktop MCP 整合
+- 基礎 YouTube 下載與 MP3 轉換，Claude Desktop MCP 整合
 
 ---
 
 ## 功能特色
 
-- **批量下載**：支援 YouTube、Podcast 等多個網址同時下載
-- **HLS 串流下載**：下載 HLS (.m3u8) 串流視頻並自動轉換為 MP4
-- **格式轉換**：自動將影片/音檔轉換為 MP3 格式
-- **Podcast 下載**：支援 RSS Feed 解析和直接 MP3 連結
-- **音檔直接下載**：純 HTTP 下載，不依賴 yt-dlp
-- **檔案管理**：建立目錄、列出檔案、開啟資料夾
-- **網路白名單**：限制下載來源，提高安全性
-- **自動修復**：啟動時自動更新 yt-dlp 和套件，清除過期快取
-- **AI 整合**：完全由 Claude AI Agent 控制操作
+- **批量下載**：支援 YouTube 單影片、Playlist、頻道 URL 同時下載多個
+- **下載進度**：Agent 可即時收到每個 URL 的下載進度通知
+- **歷史紀錄**：自動跳過已下載的 URL（檔案存在才跳過）
+- **字幕下載**：下載影片時同步取得 SRT 字幕
+- **格式查詢**：下載前查詢可用畫質和字幕語言
+- **HLS 串流下載**：下載 `.m3u8` 串流並自動轉為 MP4
+- **Podcast 下載**：支援 RSS Feed 解析和直接音檔連結
+- **格式轉換**：使用 FFmpeg 轉換為 MP3
+- **圖片下載**：下載圖片並轉換為 JPG
+- **網路白名單**：限制下載來源，防止誤操作
+- **自動修復**：每次啟動自動更新 yt-dlp、補裝套件、清除快取
+- **MCP Resources**：白名單狀態、yt-dlp 版本、下載歷史可直接查閱（不佔工具位）
+- **MCP Prompts**：6 個操作流程卡片，引導 Agent 最佳操作路徑
+
+---
 
 ## 系統需求
 
 - **Python 3.10+**
-- **yt-dlp**：下載 YouTube 影片
+- **yt-dlp**：YouTube 及各平台影音下載
 - **FFmpeg**：音視頻轉檔
-- **Node.js**：YouTube n-challenge 解密
+- **Node.js**：YouTube n-challenge 解密（建議安裝）
 
 ### macOS 安裝
 
 ```bash
 brew install yt-dlp ffmpeg node
 ```
+
+---
 
 ## 安裝步驟
 
@@ -77,9 +81,11 @@ source .venv/bin/activate
 # 3. 安裝 Python 套件
 pip install -r requirements.txt
 
-# 4. 測試
+# 4. 測試啟動
 python server.py
 ```
+
+---
 
 ## 使用方法
 
@@ -102,9 +108,9 @@ python server.py
 }
 ```
 
-使用 `start_mcp.sh` 啟動的好處：每次啟動自動更新 yt-dlp、補裝缺少套件、清除快取。
+> 使用 `start_mcp.sh` 啟動：每次啟動自動更新 yt-dlp、補裝缺少套件、清除快取，解決 yt-dlp 因 YouTube 反爬蟲更新而失效的問題。
 
-設定完成後重啟 Claude Desktop，即可透過對話使用所有功能。
+設定完成後**重啟 Claude Desktop**，即可透過對話使用所有功能。
 
 ### CLI 工具
 
@@ -122,81 +128,217 @@ python download_cli.py "url1" "url2" "url3"
 python download_cli.py --help
 ```
 
-## MCP 工具一覽
+---
+
+## 對話使用範例
+
+以下為在 Claude Desktop 中與 Agent 對話的實際用法。
+
+### 下載 YouTube 影片音檔
+
+```
+下載這個 YouTube 影片的音檔：
+https://www.youtube.com/watch?v=xxxxx
+```
+
+Agent 會自動呼叫 `download_media`，下載過程中回報進度，完成後告知檔案位置。
+
+### 下載整個 Playlist
+
+```
+下載這個 YouTube 播放清單的所有音檔，存到 ./music：
+https://www.youtube.com/playlist?list=PLxxxxx
+```
+
+`download_media` 支援 playlist URL，yt-dlp 自動展開逐一下載。
+
+### 下載影片並附帶繁中字幕
+
+```
+下載這部影片，要有繁體中文字幕：
+https://www.youtube.com/watch?v=xxxxx
+```
+
+Agent 會先呼叫 `query_formats` 確認字幕語言，再以 `subtitles=True, sub_lang="zh-TW"` 下載，字幕 `.srt` 儲存在影片同目錄。
+
+### 查詢可用格式
+
+```
+查詢這個影片有哪些可用畫質和字幕語言：
+https://www.youtube.com/watch?v=xxxxx
+```
+
+呼叫 `query_formats`，回傳格式清單（解析度、副檔名）和可用字幕語言代碼。
+
+### 下載 Podcast
+
+```
+下載這個 Podcast 的最新一集：
+https://feeds.example.com/podcast.rss
+```
+
+```
+下載第 3 集（index=2）：
+https://feeds.example.com/podcast.rss  episode_index=2
+```
+
+### 下載 HLS 串流
+
+```
+幫我下載這個 m3u8 串流，輸出為 ./downloads/video.mp4：
+https://example.com/stream/index.m3u8
+```
+
+### 管理白名單
+
+```
+列出目前的白名單規則
+```
+
+```
+新增 *.example.com 到白名單
+```
+
+```
+移除 example.com
+```
+
+### 查看下載歷史
+
+```
+顯示最近的下載紀錄
+```
+
+Agent 讀取 `data://download-history` Resource，回傳最近 20 筆紀錄。
+
+### 診斷 MCP 狀態
+
+```
+幫我診斷一下 MCP 是否正常，yt-dlp 版本是否最新
+```
+
+Agent 使用 `check_mcp_health` Prompt，依序讀取版本、白名單、下載紀錄並給出建議。
+
+---
+
+## MCP 工具一覽（8 個）
 
 | 工具 | 說明 |
 |------|------|
-| `download_media` | 使用 yt-dlp 下載 YouTube 影片/音檔，支援批量 |
-| `convert_to_mp3` | 使用 FFmpeg 將音視頻轉換為 MP3 |
+| `download_media` | yt-dlp 下載影音，支援 playlist、字幕、進度回報、歷史跳過 |
+| `convert_to_mp3` | FFmpeg 轉換音視頻為 MP3 |
 | `download_and_convert_image` | 下載圖片並轉換為 JPG |
-| `podcast_downloader` | 下載 Podcast（RSS Feed 或直接連結） |
-| `download_hls_tool` | 下載 HLS (.m3u8) 串流並轉為 MP4 |
+| `podcast_downloader` | Podcast 下載（RSS Feed 或直接音檔連結） |
+| `download_hls_tool` | HLS (.m3u8) 串流下載並轉為 MP4 |
 | `direct_download_audio` | 純 HTTP 下載音檔（不依賴 yt-dlp） |
-| `ensure_directory` | 確保目錄存在 |
-| `list_files` | 列出目錄中的檔案 |
-| `open_file` | 使用系統預設應用程式開啟檔案 |
-| `whitelist_add_rule` | 新增白名單規則 |
-| `whitelist_remove_rule` | 移除白名單規則 |
-| `whitelist_list_rules` | 列出所有白名單規則 |
-| `whitelist_set_enabled` | 啟用/停用白名單 |
+| `whitelist_manage` | 白名單查詢、新增、移除、啟用/停用 |
+| `query_formats` | 查詢 URL 可用的影片格式與字幕語言 |
+
+## MCP Resources（3 個，不佔工具位）
+
+| URI | 說明 |
+|-----|------|
+| `config://whitelist` | 白名單規則和啟用狀態 |
+| `status://ytdlp-version` | yt-dlp 版本號和執行路徑 |
+| `data://download-history` | 最近 20 筆下載紀錄 |
+
+## MCP Prompts（6 個）
+
+| Prompt | 適用情境 |
+|--------|---------|
+| `batch_download_youtube` | YouTube 批量下載音檔的完整流程 |
+| `download_with_subtitles` | 下載影片同時取得字幕 |
+| `download_podcast_series` | Podcast RSS 整季下載 |
+| `download_hls_stream` | HLS 串流下載 |
+| `manage_whitelist` | 白名單完整設定流程（含常用規則建議） |
+| `check_mcp_health` | 診斷 MCP 狀態（版本 / 白名單 / 歷史紀錄） |
+
+---
 
 ## 專案結構
 
 ```
 DownloadVideoPythonProject/
-├── server.py                    # MCP 伺服器主程式
-├── start_mcp.sh                 # 啟動包裝腳本（自動更新套件）
+├── server.py                    # MCP 伺服器主程式（8 Tools + 3 Resources + 6 Prompts）
+├── start_mcp.sh                 # 啟動包裝腳本（自動更新 yt-dlp）
 ├── download_cli.py              # CLI 下載工具
 ├── requirements.txt             # Python 套件依賴
 ├── whitelist.json               # 白名單設定檔
 ├── claude_desktop_config.example.json  # Claude Desktop 設定範例
-├── tools/                       # MCP 工具實作
-│   ├── podcast_downloader.py    #   Podcast 下載
-│   └── hls_downloader/          #   HLS 串流下載模組
-├── utils/                       # 共用工具
-│   ├── audio_downloader.py      #   音檔直接下載
-│   ├── whitelist_validator.py   #   白名單驗證
-│   ├── rss_parser.py            #   RSS Feed 解析
-│   └── sanitizer.py             #   檔名清洗
-├── docs/                        # 文件
-│   ├── guides/                  #   使用指南
-│   ├── spec/                    #   功能規格書
-│   ├── issues/                  #   問題紀錄
-│   └── archive/                 #   歸檔（過時文件與腳本）
+├── tools/
+│   ├── podcast_downloader.py    # Podcast 下載
+│   └── hls_downloader/          # HLS 串流下載模組
+├── utils/
+│   ├── audio_downloader.py      # 音檔直接下載（SSL fallback）
+│   ├── download_history.py      # 下載歷史紀錄管理
+│   ├── path_resolver.py         # yt-dlp / Node.js 路徑動態偵測
+│   ├── response.py              # 統一回傳結構（success_response / error_response）
+│   ├── whitelist_validator.py   # 白名單驗證
+│   ├── rss_parser.py            # RSS Feed 解析
+│   └── sanitizer.py             # 檔名清洗
+├── docs/
+│   ├── shared/                  # 需求文件（P0–P3 全部完成）
+│   ├── guides/                  # 使用指南（白名單、HLS）
+│   ├── spec/                    # 功能規格書
+│   ├── issues/                  # 問題紀錄
+│   └── archive/                 # 歸檔（過時文件與腳本）
 ├── downloads/                   # 下載檔案目錄
 └── images/                      # 圖片儲存目錄
 ```
 
+---
+
 ## 常見問題
 
-### yt-dlp 下載失敗（JavaScript runtime 錯誤）
+### yt-dlp 下載失敗（YTDLP_FAILED）
+
+重啟 Claude Desktop，`start_mcp.sh` 會自動執行 `pip install --upgrade yt-dlp` 和 `yt-dlp --rm-cache-dir`。
+
+手動更新：
 
 ```bash
-# 更新 yt-dlp
 source .venv/bin/activate
 pip install --upgrade yt-dlp
 yt-dlp --rm-cache-dir
 ```
 
-如果使用 `start_mcp.sh` 啟動，每次開機會自動執行上述更新。
-
 ### Claude Desktop 無法連接 MCP Server
 
-1. 確認 `claude_desktop_config.json` 中的路徑正確
+1. 確認 `claude_desktop_config.json` 中的路徑正確（絕對路徑）
 2. 按 ⌘Q 完全退出後重開 Claude Desktop
-3. 檢查日誌：`tail -f ~/Library/Logs/Claude/mcp-server-media-downloader.log`
+3. 查看日誌：
 
-### 白名單驗證失敗
+```bash
+tail -f ~/Library/Logs/Claude/mcp-server-media-downloader.log
+```
 
-在 Claude Desktop 對話中輸入「列出所有白名單規則」，確認目標網域已加入。
+### 白名單驗證失敗（WHITELIST_DENIED）
 
-詳細說明：[白名單指南](docs/guides/WHITELIST_GUIDE.md) | [HLS 設定指南](docs/guides/HLS_SETUP_GUIDE.md)
+在 Claude Desktop 輸入：
+
+```
+列出白名單規則，並把 youtube.com 和 *.googlevideo.com 加入
+```
+
+詳細說明：[白名單指南](docs/guides/WHITELIST_GUIDE.md)
+
+### HLS 下載相關問題
+
+參閱：[HLS 設定指南](docs/guides/HLS_SETUP_GUIDE.md)
+
+### 重複下載同一個 URL
+
+`download_media` 會自動查詢歷史紀錄，已下載且檔案存在時回傳 `status: skipped`，不重複下載。若需強制重新下載，請先刪除 `download_history.json`。
+
+---
 
 ## 安全注意事項
 
 - 僅下載有版權或授權的內容
 - 建議啟用白名單功能，限制下載來源
-- 定期檢查和更新白名單規則
+- `download_history.json` 已排除於 git 追蹤之外
+
+---
 
 ## 授權
 

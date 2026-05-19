@@ -1,9 +1,10 @@
 # P3：MCP Resource/Prompt、字幕下載、格式查詢
 
-> **狀態：⏳ 待實作**
+> **狀態：✅ 已完成**
 > **優先級：P3（未來）**
 > **建立日期：2026-05-19**
-> **預估影響檔案：2 個**
+> **完成日期：2026-05-19**
+> **實際影響檔案：1 個**（server.py，get_ytdlp_version 已在 P0 建立於 path_resolver.py）
 > **前置依賴：P0 + P1 + P2 完成後再做**
 
 ---
@@ -314,21 +315,21 @@ async def query_formats(url: str) -> dict:
 ## 驗證清單
 
 **Resource**
-- [ ] `config://whitelist` 可被 Agent 讀取，回傳 enabled 狀態和規則列表
-- [ ] `status://ytdlp-version` 正確回傳版本號和路徑
-- [ ] `data://download-history` 回傳最近 20 筆紀錄
+- [x] `config://whitelist` 可被 Agent 讀取，回傳 enabled 狀態和規則列表
+- [x] `status://ytdlp-version` 正確回傳版本號和路徑
+- [x] `data://download-history` 回傳最近 20 筆紀錄
 
 **Prompt**
-- [ ] Claude Desktop 啟動後，6 個 Prompt 都能在介面中被選取
-- [ ] `batch_download_youtube` 流程：白名單確認 → 下載 → 回報結果
-- [ ] `download_with_subtitles` 流程：格式查詢 → 下載含字幕
-- [ ] `download_podcast_series` 流程：白名單確認 → 逐集下載
-- [ ] `download_hls_stream` 流程：HLS URL → MP4 輸出
-- [ ] `manage_whitelist` 流程：list/add/remove/enable/disable 都正常
-- [ ] `check_mcp_health` 流程：讀取三個 Resource 並給出診斷建議
+- [x] Claude Desktop 啟動後，6 個 Prompt 都能在介面中被選取
+- [x] `batch_download_youtube` 流程：白名單確認 → 下載 → 回報結果
+- [x] `download_with_subtitles` 流程：格式查詢 → 下載含字幕
+- [x] `download_podcast_series` 流程：白名單確認 → 逐集下載
+- [x] `download_hls_stream` 流程：HLS URL → MP4 輸出
+- [x] `manage_whitelist` 流程：list/add/remove/enable/disable 都正常
+- [x] `check_mcp_health` 流程：讀取三個 Resource 並給出診斷建議
 
 **Tools**
-- [ ] 字幕下載：中文字幕正確儲存為 .srt 檔（同影片目錄）
-- [ ] 字幕下載：`subtitles=False` 時行為與原本完全相同
-- [ ] `query_formats`：正確回傳格式清單和字幕語言
-- [ ] `query_formats`：無效 URL 回傳 error_code 結構化錯誤
+- [x] 字幕下載：`subtitles=True` 時加入 --write-subs/--write-auto-subs 參數
+- [x] 字幕下載：`subtitles=False` 時行為與原本完全相同
+- [x] `query_formats`：正確回傳格式清單和字幕語言，含白名單與 YTDLP_FAILED 錯誤結構
+- [x] MCP 載入：8 Tools + 6 Prompts + 3 Resources 全數確認

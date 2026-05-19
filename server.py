@@ -4,6 +4,7 @@
 提供 YouTube 下載、圖片下載與轉檔、格式轉換和應用程式啟動功能
 """
 
+import json
 import os
 import subprocess
 import time
@@ -35,11 +36,150 @@ from utils.download_history import is_downloaded, add_record
 mcp = FastMCP("media-downloader")
 
 
+# ── MCP Resources ────────────────────────────────────────────────────────────
+
+@mcp.resource("config://whitelist")
+async def whitelist_resource() -> str:
+    """目前的白名單規則和啟用狀態"""
+    validator = get_validator()
+    rules = validator.list_rules()
+    return json.dumps({
+        "enabled": validator.enabled,
+        "total_rules": len(rules),
+        "rules": rules
+    }, ensure_ascii=False, indent=2)
+
+
+@mcp.resource("status://ytdlp-version")
+async def ytdlp_version_resource() -> str:
+    """yt-dlp 的目前版本與路徑"""
+    from utils.path_resolver import get_ytdlp_version
+    return json.dumps(get_ytdlp_version(), ensure_ascii=False, indent=2)
+
+
+@mcp.resource("data://download-history")
+async def download_history_resource() -> str:
+    """最近 20 筆下載歷史紀錄"""
+    from utils.download_history import load_history
+    history = load_history()
+    recent = history["downloads"][-20:]
+    return json.dumps(recent, ensure_ascii=False, indent=2)
+
+
+# ── MCP Prompts ───────────────────────────────────────────────────────────────
+
+@mcp.prompt()
+def batch_download_youtube() -> str:
+    """批量下載 YouTube 影片的最佳操作流程"""
+    return """
+操作步驟：
+1. 先用 whitelist_manage(action="list") 確認 youtube.com 在白名單中
+2. 使用 download_media(urls=[...], format="audio") 批量下載
+3. 若下載失敗且 error_code 為 YTDLP_FAILED，可能需要更新 yt-dlp（重啟 Claude Desktop 即可自動更新）
+4. 下載完成後告知使用者檔案位置和大小
+"""
+
+
+@mcp.prompt()
+def download_with_subtitles() -> str:
+    """下載影片同時取得字幕的操作流程"""
+    return """
+操作步驟：
+1. 使用 query_formats(url=...) 查詢可用格式和字幕語言
+2. 確認 subtitle_languages 或 auto_subtitle_languages 中有 zh-TW 或 en
+3. 使用 download_media(urls=[...], format="mp4", subtitles=True, sub_lang="zh-TW,en")
+4. 字幕檔（.srt）會自動儲存在影片同目錄下
+"""
+
+
+@mcp.prompt()
+def download_podcast_series() -> str:
+    """下載 Podcast RSS Feed 整季的操作流程"""
+    return """
+操作步驟：
+1. 先用 whitelist_manage(action="list") 確認 Podcast 網域在白名單中
+   若不在，使用 whitelist_manage(action="add", rule="*.podcast-domain.com") 加入
+2. 使用 podcast_downloader(url=RSS_URL, episode_index=0) 下載最新一集確認格式正確
+3. 批量下載時，依序指定 episode_index=0,1,2,... 逐集下載
+4. 若 URL 為直接 MP3 連結（非 RSS），改用 direct_download_audio(url=...)
+"""
+
+
+@mcp.prompt()
+def download_hls_stream() -> str:
+    """下載 HLS (.m3u8) 串流視頻的操作流程"""
+    return """
+操作步驟：
+1. 確認手上有 .m3u8 的 URL（通常從瀏覽器開發者工具的 Network 面板取得）
+2. 使用 download_hls_tool(m3u8_url=..., output_path="./downloads/video.mp4")
+3. 大型影片建議加上 threads=32 加速下載
+4. 注意：不支援加密的 HLS 流（AES-128 加密）
+5. 下載完成後確認 MP4 可正常播放
+"""
+
+
+@mcp.prompt()
+def manage_whitelist() -> str:
+    """白名單完整設定流程"""
+    return """
+白名單管理操作：
+
+查看目前規則：
+  whitelist_manage(action="list")
+
+新增網域（三種格式）：
+  完整網域：whitelist_manage(action="add", rule="example.com")
+  子網域：  whitelist_manage(action="add", rule="*.example.com")
+  正則：    whitelist_manage(action="add", rule="^https?://.*\\.example\\.com/.*")
+
+移除規則：
+  whitelist_manage(action="remove", rule="example.com")
+
+暫時停用白名單（測試用，不建議長期）：
+  whitelist_manage(action="disable")
+
+重新啟用：
+  whitelist_manage(action="enable")
+
+常用白名單規則建議：
+  youtube.com, *.youtube.com, youtu.be — YouTube
+  *.buzzsprout.com, *.libsyn.com       — Podcast 平台
+  *.googlevideo.com                    — YouTube CDN（下載需要）
+"""
+
+
+@mcp.prompt()
+def check_mcp_health() -> str:
+    """診斷 MCP 狀態的操作流程"""
+    return """
+MCP 狀態診斷步驟：
+
+1. 讀取 yt-dlp 版本：
+   讀取 Resource status://ytdlp-version
+   若版本超過 30 天未更新，建議重啟 Claude Desktop（start_mcp.sh 會自動更新）
+
+2. 確認白名單狀態：
+   讀取 Resource config://whitelist
+   確認 enabled=true 且目標網域在規則中
+
+3. 查看最近下載紀錄：
+   讀取 Resource data://download-history
+   確認最近下載是否成功
+
+4. 若 yt-dlp 下載持續失敗：
+   error_code=YTDLP_FAILED    → 重啟 Claude Desktop 強制更新
+   error_code=NODE_NOT_FOUND  → 需安裝 Node.js（brew install node）
+   error_code=WHITELIST_DENIED → 執行 manage_whitelist 流程
+"""
+
+
 @mcp.tool()
 async def download_media(
     urls: list[str],
     output_dir: str = "./downloads",
     format: Literal["audio", "video", "best", "mp4", "mp3", "webm"] = "audio",
+    subtitles: bool = False,
+    sub_lang: str = "zh-TW,en",
     ctx: Context = None
 ) -> dict:
     """
@@ -56,6 +196,8 @@ async def download_media(
             - 'mp4': MP4 視頻格式
             - 'mp3': MP3 音頻格式
             - 'webm': WebM 視頻格式
+        subtitles: 是否同時下載字幕（預設 False）
+        sub_lang: 字幕語言代碼，逗號分隔（預設 "zh-TW,en"）
 
     Returns:
         包含下載結果的字典，含成功/失敗/跳過數量、檔案列表和錯誤資訊
@@ -124,6 +266,14 @@ async def download_media(
                 cmd.extend(["-f", "bestvideo+bestaudio/best"])
             else:  # best
                 cmd.extend(["-f", "best"])
+
+            if subtitles:
+                cmd.extend([
+                    "--write-subs",
+                    "--write-auto-subs",
+                    "--sub-langs", sub_lang,
+                    "--sub-format", "srt/best"
+                ])
 
             cmd.append(url)
 
@@ -389,6 +539,61 @@ async def direct_download_audio(
         output_dir=output_dir,
         filename=filename,
         skip_whitelist=False  # MCP 工具永遠使用白名單
+    )
+
+
+@mcp.tool()
+async def query_formats(url: str) -> dict:
+    """
+    查詢 URL 可用的下載格式（影片畫質、音檔品質、字幕語言）
+
+    Args:
+        url: 媒體 URL（YouTube 等 yt-dlp 支援的平台）
+
+    Returns:
+        可用格式列表，包含解析度、字幕語言
+    """
+    validator = get_validator()
+    is_allowed, message = validator.validate(url)
+    if not is_allowed:
+        return error_response("WHITELIST_DENIED", message, url=url)
+
+    try:
+        yt_dlp_path = find_ytdlp()
+    except FileNotFoundError as e:
+        return error_response("YTDLP_NOT_FOUND", str(e))
+
+    try:
+        result = subprocess.run(
+            [yt_dlp_path, "-J", "--no-download", url],
+            capture_output=True, text=True, timeout=30, check=True
+        )
+        info = json.loads(result.stdout)
+    except subprocess.TimeoutExpired:
+        return error_response("DOWNLOAD_TIMEOUT", "格式查詢逾時（超過 30 秒）", url=url)
+    except subprocess.CalledProcessError as e:
+        return error_response("YTDLP_FAILED", str(e), stderr=e.stderr, url=url)
+    except json.JSONDecodeError as e:
+        return error_response("YTDLP_FAILED", f"解析格式資訊失敗: {e}", url=url)
+
+    formats = [
+        {
+            "format_id": f.get("format_id"),
+            "ext": f.get("ext"),
+            "resolution": f.get("resolution", "audio only"),
+            "filesize": f.get("filesize"),
+            "vcodec": f.get("vcodec"),
+            "acodec": f.get("acodec"),
+        }
+        for f in info.get("formats", [])
+    ]
+
+    return success_response(
+        title=info.get("title"),
+        duration=info.get("duration"),
+        formats=formats[-10:],
+        subtitle_languages=list(info.get("subtitles", {}).keys()),
+        auto_subtitle_languages=list(info.get("automatic_captions", {}).keys())[:10]
     )
 
 
