@@ -209,7 +209,7 @@ https://example.com/stream/index.m3u8
 顯示最近的下載紀錄
 ```
 
-Agent 讀取 `data://download-history` Resource，回傳最近 20 筆紀錄。
+Agent 會自動讀取 `data://download-history` Resource，回傳最近 20 筆紀錄。
 
 ### 診斷 MCP 狀態
 
@@ -217,7 +217,7 @@ Agent 讀取 `data://download-history` Resource，回傳最近 20 筆紀錄。
 幫我診斷一下 MCP 是否正常，yt-dlp 版本是否最新
 ```
 
-Agent 使用 `check_mcp_health` Prompt，依序讀取版本、白名單、下載紀錄並給出建議。
+在輸入框輸入 `/` 選取 `check_mcp_health`，或直接在對話中說「用 check_mcp_health 診斷」，Agent 會依序讀取版本、白名單、下載紀錄並給出建議。
 
 ---
 
@@ -236,13 +236,76 @@ Agent 使用 `check_mcp_health` Prompt，依序讀取版本、白名單、下載
 
 ## MCP Resources（3 個，不佔工具位）
 
+Resources 是唯讀資料，需透過 Claude Desktop UI **手動附加**到對話中才能讓 Agent 讀取。
+Agent **不會**主動偵測並讀取 Resource，自然語言也無法直接觸發（yt-dlp 版本、下載歷史都沒有對應工具）。
+
 | URI | 說明 |
 |-----|------|
 | `config://whitelist` | 白名單規則和啟用狀態 |
 | `status://ytdlp-version` | yt-dlp 版本號和執行路徑 |
 | `data://download-history` | 最近 20 筆下載紀錄 |
 
+### 使用步驟（Claude Desktop）
+
+1. 在對話輸入框左下角點擊 **`+`** 按鈕
+2. 選擇 **「Add from MCP」** 或 **「MCP Resources」**
+3. 找到 `media-downloader` 伺服器，選取要附加的 Resource
+4. Resource 會顯示為對話中的附件，Agent 即可讀取其內容
+5. 輸入問題，例如：
+
+```
+根據剛才附加的 Resource，yt-dlp 目前版本是多少？
+```
+
+```
+根據附加的下載歷史，最近下載了哪些檔案？
+```
+
+> **注意**：Claude Desktop UI 的 Resource 入口位置隨版本不同可能有差異，若找不到 `+` 選單，可改用下方「直接指定 URI」的方式。
+
+### 備用方式：直接在對話中指定 URI
+
+若 UI 無法附加，可明確告訴 Agent 要讀取哪個 Resource：
+
+```
+請使用 MCP resource 讀取 status://ytdlp-version，告訴我 yt-dlp 版本
+```
+
+```
+請用 MCP resource 讀取 data://download-history，列出最近的下載紀錄
+```
+
+---
+
 ## MCP Prompts（6 個）
+
+Prompts 是預設的操作流程說明，有兩種使用方式：
+
+### 方式一：透過 Claude Desktop UI（推薦）
+
+**`+` 按鈕：**
+1. 點擊對話輸入框左下角的 **`+`** 按鈕
+2. 選擇 **「MCP Prompts」** 或對應的 `media-downloader` 項目
+3. 點選 Prompt 名稱後自動帶入流程說明
+
+**`/` 斜線指令：**
+1. 在對話輸入框直接輸入 **`/`**
+2. 從彈出清單找到 Prompt 名稱並點選
+
+> 首次設定或修改 Prompt 後需**重啟 Claude Desktop** 才會出現在清單中。
+
+### 方式二：在對話中直接呼叫
+
+```
+使用 batch_download_youtube 流程，下載這幾個 URL：
+https://www.youtube.com/watch?v=aaa
+```
+
+```
+用 check_mcp_health 診斷一下目前 MCP 狀態
+```
+
+Agent 先取得 Prompt 的步驟說明，再依序呼叫對應工具。
 
 | Prompt | 適用情境 |
 |--------|---------|
