@@ -43,7 +43,8 @@
 - **格式查詢**：下載前查詢可用畫質和字幕語言
 - **HLS 串流下載**：下載 `.m3u8` 串流並自動轉為 MP4
 - **Podcast 下載**：支援 RSS Feed 解析和直接音檔連結
-- **格式轉換**：使用 FFmpeg 轉換為 MP3
+- **格式轉換**：使用 FFmpeg 轉換為 MP3（可同步進行響度正規化）
+- **音量調整**：支援固定增益、EBU R128 響度正規化、動態正規化
 - **圖片下載**：下載圖片並轉換為 JPG
 - **網路白名單**：限制下載來源，防止誤操作
 - **自動修復**：每次啟動自動更新 yt-dlp、補裝套件、清除快取
@@ -211,6 +212,34 @@ https://example.com/stream/index.m3u8
 
 Agent 會自動讀取 `data://download-history` Resource，回傳最近 20 筆紀錄。
 
+### 調整音檔音量
+
+```
+把這個音檔音量調大：./downloads/podcast_ep1.mp3
+```
+
+Agent 會呼叫 `adjust_audio`，預設使用 `loudnorm` 模式（EBU R128 響度正規化），覆蓋原檔。
+
+```
+把 lecture.m4a 音量調成 3 倍
+```
+
+Agent 使用 `mode="volume", volume_multiplier=3.0` 處理。
+
+```
+把 video.mp4 轉成 MP3，順便把音量正規化
+```
+
+Agent 呼叫 `convert_to_mp3(normalize=True)`，轉換與正規化一步完成。
+
+#### 三種模式說明
+
+| mode | 適合情境 |
+|------|---------|
+| `loudnorm`（預設） | 整體音量偏小，調整至廣播 / Podcast 標準（-23 LUFS） |
+| `volume` | 快速倍增，`volume_multiplier=2.0` 即加倍 |
+| `dynaudnorm` | 音量忽大忽小，動態拉平整體音量 |
+
 ### 診斷 MCP 狀態
 
 ```
@@ -221,18 +250,19 @@ Agent 會自動讀取 `data://download-history` Resource，回傳最近 20 筆�
 
 ---
 
-## MCP 工具一覽（8 個）
+## MCP 工具一覽（9 個）
 
 | 工具 | 說明 |
 |------|------|
 | `download_media` | yt-dlp 下載影音，支援 playlist、字幕、進度回報、歷史跳過 |
-| `convert_to_mp3` | FFmpeg 轉換音視頻為 MP3 |
+| `convert_to_mp3` | FFmpeg 轉換音視頻為 MP3（可加 `normalize=True` 同步正規化） |
 | `download_and_convert_image` | 下載圖片並轉換為 JPG |
 | `podcast_downloader` | Podcast 下載（RSS Feed 或直接音檔連結） |
 | `download_hls_tool` | HLS (.m3u8) 串流下載並轉為 MP4 |
 | `direct_download_audio` | 純 HTTP 下載音檔（不依賴 yt-dlp） |
 | `whitelist_manage` | 白名單查詢、新增、移除、啟用/停用 |
 | `query_formats` | 查詢 URL 可用的影片格式與字幕語言 |
+| `adjust_audio` | 調整音檔音量（固定增益 / EBU R128 響度正規化 / 動態正規化） |
 
 ## MCP Resources（3 個，不佔工具位）
 

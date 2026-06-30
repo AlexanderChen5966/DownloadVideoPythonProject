@@ -10,6 +10,9 @@
 | [p1_unify_error_and_merge_logic.md](./p1_unify_error_and_merge_logic.md) | 統一錯誤結構、合併重複邏輯、修復 SSL | ✅ 已完成 |
 | [p2_progress_history_playlist.md](./p2_progress_history_playlist.md) | 下載進度回報、歷史紀錄、playlist 支援 | ✅ 已完成 |
 | [p3_mcp_resource_prompt_subtitle.md](./p3_mcp_resource_prompt_subtitle.md) | MCP Resource/Prompt、字幕、格式查詢 | ✅ 已完成 |
+| [adjust_audio_volume.md](./adjust_audio_volume.md) | 新增 adjust_audio 工具、音量調整與響度正規化 | ⏳ 待實作 |
+| [dash_stream_download_notes.md](./dash_stream_download_notes.md) | DASH 串流下載與 DRM 判斷紀錄、工具範圍限制 | 📝 知識紀錄 |
+| [p4_widevine_drm_decryption.md](./p4_widevine_drm_decryption.md) | Widevine DRM 解密下載（研究用途） | ✅ 已完成 |
 
 ## 執行順序
 

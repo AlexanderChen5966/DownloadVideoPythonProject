@@ -20,3 +20,9 @@ m3u8>=3.5.0
 
 # CLI 進度條套件（選用）
 tqdm>=4.65.0
+
+# Widevine DRM 解密（研究用途，需自備 WVD device file）
+# 系統工具（需額外安裝）：
+# - Bento4 mp4decrypt: https://www.bento4.com/downloads/
+# - shaka-packager: https://github.com/shaka-project/shaka-packager
+pywidevine>=1.9.0

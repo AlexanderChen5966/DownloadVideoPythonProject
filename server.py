@@ -597,5 +597,195 @@ async def query_formats(url: str) -> dict:
     )
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Widevine DRM 解密（研究用途）— MCP 介面已註解，改為手動 CLI 操作
+#
+# 用途：解密 Widevine L3 DRM 保護的媒體內容（如博客來電子書音訊）
+# 手動操作方式：
+#   1. 用 key_extractor.py 取得 Content Key
+#   2. 用 yt-dlp 下載加密音訊
+#   3. 用 mp4decrypt 解密
+#   4. 用 ffmpeg 轉 MP3
+#
+# 相關模組：tools/widevine_downloader/
+#   - decryptor.py:     pywidevine 封裝（License 交涉、檔案解密）
+#   - key_extractor.py: 三模式金鑰提取（自動/手動/偵測）
+#   - drm_detector.py:  DRM 類型偵測
+#   - samsung_l3.wvd:   VideoHelp 下載的 L3 WVD（Samsung SM-A125F）
+#
+# 參考文件：docs/issues/ISSUE-002-Widevine-WVD-Research.md
+# ══════════════════════════════════════════════════════════════════════════════
+
+# 以下 MCP resource/tool 因改為手動操作已註解。保留原始碼供日後參考。
+
+# @mcp.resource("status://widevine")
+# async def widevine_status() -> str:
+#     """pywidevine 版本與環境狀態（是否安裝解密工具）
+#
+#     手動替代：python -c "import pywidevine; print(pywidevine.__version__)"
+#     """
+#     import shutil
+#     result: dict = {}
+#
+#     try:
+#         import pywidevine
+#         result["pywidevine_version"] = getattr(pywidevine, "__version__", "installed")
+#         result["pywidevine_available"] = True
+#     except ImportError:
+#         result["pywidevine_available"] = False
+#         result["pywidevine_version"]   = None
+#
+#     decrypt_tool = None
+#     for name in ("packager", "shaka-packager", "packager-linux-x64",
+#                  "packager-osx-x64", "packager-win-x64.exe"):
+#         path = shutil.which(name)
+#         if path:
+#             decrypt_tool = {"name": "shaka-packager", "path": path}
+#             break
+#     if not decrypt_tool:
+#         path = shutil.which("mp4decrypt")
+#         if path:
+#             decrypt_tool = {"name": "mp4decrypt", "path": path}
+#
+#     result["decrypt_tool"]     = decrypt_tool
+#     result["ffmpeg_available"] = bool(shutil.which("ffmpeg"))
+#     result["yt_dlp_available"] = bool(shutil.which("yt-dlp"))
+#     result["note"] = (
+#         "WVD device file 需使用者自行準備（本專案不提供）。"
+#         "研究用途僅限 Widevine L3。"
+#     )
+#     return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+# @mcp.tool()
+# async def download_media_widevine(
+#     url: str,
+#     pssh: str,
+#     license_url: str,
+#     headers: str = "{}",
+#     wvd_path: str = "",
+#     output_dir: str = "./downloads",
+#     output_name: str = "widevine_output",
+#     format: Literal["mp3", "m4a"] = "mp3",
+#     privacy_mode: bool = False,
+#     ctx: Context = None,
+# ) -> dict:
+#     """
+#     研究用途：解密 Widevine L3 DRM 保護的媒體內容並下載。
+#     完整流程：取得 Content Key → yt-dlp 下載加密檔 → 解密 → ffmpeg 轉檔。
+#
+#     手動替代（見 ISSUE-002 方式 C）：
+#       1. python tools/widevine_downloader/key_extractor.py
+#       2. yt-dlp --allow-unplayable-formats -f bestaudio -o "enc.%(ext)s" <mpd_url>
+#       3. mp4decrypt --key <kid>:<key> enc.m4a dec.m4a
+#       4. ffmpeg -i dec.m4a -vn -c:a libmp3lame -q:a 0 output.mp3
+#     """
+#     import json as _json
+#     from utils.path_resolver import find_ytdlp
+#
+#     if ctx:
+#         await ctx.report_progress(progress=0, total=4, message="初始化 Widevine 解密器...")
+#
+#     if not wvd_path:
+#         return error_response(
+#             "WVD_NOT_PROVIDED",
+#             "必須提供 wvd_path（Widevine Device 檔案路徑）。本專案不提供 WVD 檔案，請自行準備。"
+#         )
+#     if not pssh:
+#         return error_response("MISSING_PARAM", "必須提供 pssh（Base64 PSSH data）")
+#     if not license_url:
+#         return error_response("MISSING_PARAM", "必須提供 license_url（License Server URL）")
+#
+#     try:
+#         req_headers: dict = _json.loads(headers) if headers and headers.strip() != "{}" else {}
+#     except _json.JSONDecodeError:
+#         return error_response("INVALID_HEADERS", f"headers 必須是合法 JSON 字串：{headers}")
+#
+#     try:
+#         from tools.widevine_downloader import WidevineDecryptor, WvdNotFoundError, DecryptToolNotFoundError
+#         decryptor = WidevineDecryptor(wvd_path)
+#     except ImportError:
+#         return error_response("PYWIDEVINE_NOT_INSTALLED", "請安裝 pywidevine：pip install pywidevine")
+#     except Exception as e:
+#         return error_response("WVD_LOAD_FAILED", f"載入 WVD 失敗：{e}", wvd_path=wvd_path)
+#
+#     if ctx:
+#         await ctx.report_progress(progress=1, total=4, message="取得 Content Key 中...")
+#
+#     try:
+#         ytdlp_path = find_ytdlp()
+#     except FileNotFoundError as e:
+#         return error_response("YTDLP_NOT_FOUND", str(e))
+#
+#     if ctx:
+#         await ctx.report_progress(progress=2, total=4, message="下載加密媒體中...")
+#
+#     result = decryptor.full_pipeline(
+#         url=url,
+#         pssh=pssh,
+#         license_url=license_url,
+#         output_dir=output_dir,
+#         output_name=output_name,
+#         headers=req_headers or None,
+#         format=format,
+#         ytdlp_path=ytdlp_path,
+#         privacy=privacy_mode,
+#         keep_encrypted=False,
+#     )
+#
+#     if ctx:
+#         await ctx.report_progress(progress=4, total=4, message="完成")
+#
+#     if result["success"]:
+#         output_file = result["output_file"]
+#         file_size = os.path.getsize(output_file) if os.path.exists(output_file) else 0
+#         content_keys = [k for k in result.get("keys", []) if k["type"] == "CONTENT"]
+#         return success_response(
+#             output_file=output_file,
+#             file_size=file_size,
+#             format=format,
+#             content_keys=[f"{k['kid']}:{k['key']}" for k in content_keys],
+#         )
+#     else:
+#         return error_response("WIDEVINE_FAILED", result.get("error", "未知錯誤"), url=url)
+
+
+# @mcp.tool()
+# async def detect_drm(
+#     manifest_url: str,
+#     headers: str = "{}",
+# ) -> dict:
+#     """
+#     偵測媒體 Manifest（MPD/M3U8）的 DRM 類型，判斷是否可解密。
+#
+#     手動替代：python -c "from tools.widevine_downloader import detect_from_url; print(detect_from_url('$MANIFEST_URL'))"
+#     """
+#     import json as _json
+#
+#     try:
+#         req_headers: dict = _json.loads(headers) if headers and headers.strip() != "{}" else {}
+#     except _json.JSONDecodeError:
+#         return error_response("INVALID_HEADERS", f"headers 必須是合法 JSON 字串：{headers}")
+#
+#     try:
+#         from tools.widevine_downloader import detect_from_url
+#     except ImportError:
+#         return error_response("WIDEVINE_MODULE_UNAVAILABLE", "無法載入 widevine_downloader 模組")
+#
+#     info = detect_from_url(manifest_url, headers=req_headers or None)
+#
+#     return success_response(
+#         manifest_url=manifest_url,
+#         drm_type=info.drm_type.value,
+#         drm_level=info.drm_level.value,
+#         is_protected=info.is_protected,
+#         can_decrypt_with_pywidevine=info.can_decrypt_with_pywidevine,
+#         summary=info.summary(),
+#         pssh=info.pssh,
+#         license_url=info.license_url,
+#         raw_schemes=info.raw_schemes,
+#     )
+
+
 if __name__ == "__main__":
     mcp.run()

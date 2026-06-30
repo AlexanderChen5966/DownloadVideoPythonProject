@@ -1,0 +1,235 @@
+# P4：Widevine DRM 解密下載（研究用途）
+
+**優先級：** Low（研究性功能）
+**建立日期：** 2026-06-30
+**完成日期：** 2026-06-30
+**狀態：** ✅ 程式碼已完成，WVD 取得方式待突破
+**影響路徑：** `tools/widevine_downloader/`（新增模組）、`server.py`、`download_cli.py`、`docs/shared/dash_stream_download_notes.md`
+
+---
+
+## 背景
+
+現有下載器遇到 Widevine DRM 保護的串流時，只能回報「DRM，放棄」（見 `dash_stream_download_notes.md`）。使用者希望為研究用途，在專案中新增一套可選用的 Widevine L3 解密下載流程，能對特定平台（如 Rakuten TV、部分 OTT）的音訊內容進行解密與下載。
+
+此功能**不作為預設啟用**，需使用者自備 WVD device file 並明確指定啟用，以符合研究目的之定位。
+
+---
+
+## 實作完成項目
+
+### 新增模組 `tools/widevine_downloader/`
+
+| 檔案 | 功能 |
+|------|------|
+| `drm_detector.py` | 解析 MPD/M3U8，偵測 Widevine/PlayReady/FairPlay，提取 PSSH |
+| `decryptor.py` | 封裝 pywidevine CDM，支援 `get_content_keys()` + `decrypt_file()` + `full_pipeline()` |
+| `key_extractor.py` | 三種模式：自動/手動/偵測 Manifest，含互動式 CLI |
+| `__init__.py` | 統一匯出所有公開 API |
+
+### 修改既有檔案
+
+| 檔案 | 修改內容 |
+|------|---------|
+| `download_cli.py` | 新增 `--decrypt-widevine`、`--wvd-path`、`--widevine-pssh`、`--widevine-license-url`、`--widevine-headers`、`--detect-drm` |
+| `server.py` | 新增 `status://widevine` resource、`download_media_widevine` tool、`detect_drm` tool |
+| `requirements.txt` | 新增 `pywidevine>=1.9.0` |
+
+### CLI 使用方式
+
+```bash
+# 偵測 DRM 類型
+python download_cli.py --detect-drm "https://...stream.mpd"
+
+# 完整解密下載（需 WVD）
+python download_cli.py "https://...stream.mpd" \
+  --decrypt-widevine \
+  --wvd-path /path/to/device.wvd \
+  --widevine-pssh "AAAA..." \
+  --widevine-license-url "https://license.example.com/..." \
+  --widevine-headers '{"Authorization": "Bearer xxx"}' \
+  -f mp3
+
+# 互動式金鑰提取
+python -m tools.widevine_downloader.key_extractor --wvd /path/to/device.wvd
+```
+
+---
+
+## 實測紀錄：博客來電子書（vod-ebook.books.com.tw）
+
+**測試日期：** 2026-06-30
+
+### DRM 偵測結果
+
+```
+DASH (stream.mpd)
+  DRM 類型   ：Widevine L3
+  PSSH       ：AAAAa3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAEsSELscBnJbEyvs...
+  License URL：https://widevine.keyos.com/api/v4/getLicense（KeyOS 平台）
+
+HLS (master.m3u8)
+  master 層  ：無 DRM 標記（偵測為 none）← 誤判
+  子播放清單 ：EXT-X-KEY METHOD=SAMPLE-AES, URI="skd://..."（FairPlay）
+```
+
+> ⚠️ **DRM 偵測器漏洞**：`drm_detector.py` 的 M3U8 偵測只讀 master playlist，沒有追入子播放清單（media playlist），會漏掉 `EXT-X-KEY`。待修。
+
+### License Server 測試
+
+```python
+# 送假 challenge（100 bytes random），測試 customdata 認證是否通過
+POST https://widevine.keyos.com/api/v4/getLicense
+headers: {customdata: "...", origin: "https://viewer-ebook.books.com.tw", ...}
+
+# 結果
+HTTP 403
+{"errorcode": 371000005,
+ "errormsg": "Widevine license generation failed (SIGNED_MESSAGE_PARSE_ERROR)",
+ "errorid": "..."}
+```
+
+**結論：`customdata` 認證通過**（403 是 challenge 格式錯誤，不是 auth 錯誤）。
+有效的 WVD challenge 理論上能正確取得 Content Key。
+
+### customdata 特性
+
+```xml
+<WidevineContentKeySpec TrackType="HD">
+    <SecurityLevel>1</SecurityLevel>  ← 要求 L1
+</WidevineContentKeySpec>
+<ExpirationTime>... 1 小時後過期 ...</ExpirationTime>
+```
+
+- Token **每次頁面載入重新產生**，有效期 1 小時
+- SecurityLevel=1 要求，可能會拒絕 L3 CDM（但 audio 軌道不一定強制）
+- 從瀏覽器 Network 面板 → 搜尋 `Widevine` → Request Headers → `customdata` 欄位取得
+
+---
+
+## WVD 取得方式研究紀錄
+
+### 方式 A：Android 模擬器 + Frida dumper ❌ 失敗
+
+**嘗試工具：** [wvdumper/dumper](https://github.com/wvdumper/dumper)
+
+**環境：**
+- Android Studio AVD：Pixel 3a, API 28 (arm64-v8a)
+- frida-server 17.15.3
+
+**發現的問題與修正：**
+
+| 問題 | 原因 | 修正 |
+|------|------|------|
+| `TypeError: not a function` | Frida 17.x 移除 `Module.enumerateExportsSync` | 改為 `Process.getModuleByName(name).enumerateExports()` |
+| `Script.exports` 棄用警告 | Frida 17.x 新 API | 改為 `script.exports_sync` |
+| protobuf 版本衝突 | dumper 使用舊版 protobuf 生成碼 | 加環境變數 `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` |
+| 鉤錯進程 | 以為是 `@1.0-service`（pid=315）| 實際為 `@1.3-service.widevine`（pid=317）|
+| 動態函式名稱不符 | dumper 硬編碼舊版名稱（`polorucp` 等） | 此版本 CDM 名稱完全不同（`vyxlkkyb` 等） |
+
+**最終失敗原因：**
+Chrome 瀏覽器有自己內建的 Widevine CDM，**不經過** Android 系統的 `libwvdrmengine.so` / `libwvhidl.so`。Frida 掛的 hook 完全不會被觸發。`wvdumper/dumper` 只對**原生 Android App**（Netflix App、YouTube App）有效，不適用於模擬器內的 Chrome。
+
+**進程與模組對應關係（已確認）：**
+
+| 進程 | PID | Widevine 模組 | `_lcc*` 函式 |
+|------|-----|--------------|-------------|
+| `android.hardware.drm@1.0-service` | 315 | `libwvdrmengine.so` | 139 個 |
+| `android.hardware.drm@1.3-service.widevine` | 317 | `libwvhidl.so` | 139 個 |
+| `android.hardware.drm@1.3-service.clearkey` | 316 | — | — |
+
+---
+
+### 方式 B：WidevineProxy2 + Remote CDM（待測試）
+
+**工具：** [DevLARLEY/WidevineProxy2](https://github.com/DevLARLEY/WidevineProxy2)
+
+WidevineProxy2 **不是 WVD 提取工具**，而是金鑰攔截器：
+- 在瀏覽器播放 DRM 內容時攔截 License 交換
+- 需載入 WVD 或 Remote CDM 才能運作
+- 直接輸出 `kid:key` 格式的 Content Key
+
+**Remote CDM 模式（不需自備 WVD）：**
+
+```
+1. 下載官方提供的 remote.json：
+   https://github.com/user-attachments/files/21834836/remote.json
+
+2. WidevineProxy2 擴充功能 → 右上角選 Remote CDM
+   → Choose remote.json → 勾選 Enabled
+
+3. 開啟博客來書本頁面並播放
+
+4. 擴充功能 Keys 欄位出現 kid:key 後
+   → 用 mp4decrypt 解密下載的加密檔
+```
+
+> 若此 Remote CDM 被博客來 KeyOS 拒絕（L1 要求），需改用實體 Android 裝置提取的 WVD。
+
+---
+
+### 方式 C：videohelp.com 現成 WVD（待嘗試）
+
+[forum.videohelp.com/forums/48](https://forum.videohelp.com/forums/48) 有社群分享的 L3 WVD 檔案。
+缺點：可能已被特定 License Server 封鎖。
+
+---
+
+### 方式 D：實體 Android 裝置 + Frida（最可靠但最複雜）
+
+使用真實 Android 手機（已 root 或可用 `adb root`）：
+
+```bash
+# 啟動 frida-server（對應裝置 CPU 架構版本）
+adb push frida-server /data/local/tmp/
+adb shell chmod 755 /data/local/tmp/frida-server
+adb shell nohup /data/local/tmp/frida-server &
+
+# 在裝置的 YouTube/Netflix App 播放任何 Widevine 內容
+# 執行修正後的 dumper
+PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python python dump_keys.py
+
+# 得到 private_key.pem + client_id.bin 後打包
+pywidevine create-device \
+  --type ANDROID \
+  --security-level 3 \
+  -k private_key.pem \
+  -c client_id.bin \
+  -o device.wvd
+```
+
+**注意：** 需使用修正後的 `dumper/Helpers/script.js`（見方式 A 的修正紀錄）。
+
+---
+
+## 已知限制與注意事項
+
+1. **M3U8 偵測器漏洞**：只讀 master playlist，不追子播放清單。博客來 HLS 的 FairPlay 被誤判為 none。
+2. **SecurityLevel=1 風險**：博客來要求 L1，L3 CDM 可能被拒（audio 可能例外）。
+3. **customdata 1 小時過期**：每次下載前需重新從瀏覽器取得。
+4. **FairPlay 無法解密**：`skd://` 協定為 Apple 硬體安全，軟體無解。
+5. **WVD 本身不提供**：需使用者自行取得，本專案不附帶任何 L3 provision。
+
+---
+
+## 後續行動
+
+- [ ] 修正 `drm_detector.py` 的 M3U8 偵測：追入子播放清單讀取 `EXT-X-KEY`
+- [ ] 測試 WidevineProxy2 Remote CDM 對博客來的效果（方式 B）
+- [ ] 若 Remote CDM 失效，嘗試實體 Android 裝置（方式 D）
+- [ ] 確認有 WVD 後，用已完成的 CLI 工具完整測試 `--decrypt-widevine` 流程
+
+---
+
+## 相關檔案
+
+| 檔案 | 說明 |
+|------|------|
+| `tools/widevine_downloader/__init__.py` | 模組匯出 |
+| `tools/widevine_downloader/drm_detector.py` | DRM 偵測（含已知 M3U8 漏洞） |
+| `tools/widevine_downloader/decryptor.py` | pywidevine 封裝 |
+| `tools/widevine_downloader/key_extractor.py` | 金鑰提取互動介面 |
+| `download_cli.py` | CLI 整合（`--decrypt-widevine` 等參數） |
+| `server.py` | MCP tool `download_media_widevine` + `detect_drm` |
+| `requirements.txt` | 新增 `pywidevine>=1.9.0` |
+| `/tmp/opencode/dumper/` | wvdumper 修正版（含 Frida 17.x 相容修正） |

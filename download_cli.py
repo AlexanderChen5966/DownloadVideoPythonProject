@@ -270,6 +270,118 @@ def print_summary(results: List[dict]):
     print("=" * 60)
 
 
+# ── Widevine 輔助函式 ──────────────────────────────────────────────────────────
+
+def _run_detect_drm(manifest_url: str) -> None:
+    """偵測 Manifest URL 的 DRM 類型並顯示結果"""
+    try:
+        from tools.widevine_downloader import detect_from_url
+    except ImportError as e:
+        print(f"錯誤：無法載入 widevine_downloader 模組：{e}")
+        sys.exit(1)
+
+    print(f"正在分析 Manifest：{manifest_url}")
+    info = detect_from_url(manifest_url)
+    print(f"\nDRM 類型   ：{info.drm_type.value}")
+    print(f"安全等級   ：{info.drm_level.value}")
+    print(f"結論       ：{info.summary()}")
+    if info.pssh:
+        print(f"PSSH       ：{info.pssh}")
+    if info.license_url:
+        print(f"License URL：{info.license_url}")
+    if info.raw_schemes:
+        print(f"Schemes    ：{', '.join(info.raw_schemes)}")
+
+
+def _run_widevine_decrypt(args) -> None:
+    """執行 Widevine 解密完整流程"""
+    import json as _json
+
+    try:
+        from tools.widevine_downloader import WidevineDecryptor, WvdNotFoundError
+    except ImportError as e:
+        print(f"錯誤：無法載入 widevine_downloader 模組：{e}")
+        print("請確認已安裝 pywidevine：pip install pywidevine")
+        sys.exit(1)
+
+    # 驗證必要參數
+    missing = []
+    if not args.wvd_path:
+        missing.append("--wvd-path")
+    if not args.widevine_pssh:
+        missing.append("--widevine-pssh")
+    if not args.widevine_license_url:
+        missing.append("--widevine-license-url")
+    if not args.urls:
+        missing.append("URL（位置參數）")
+
+    if missing:
+        print(f"錯誤：--decrypt-widevine 模式缺少以下參數：{', '.join(missing)}")
+        print("\n使用範例：")
+        print('  download_cli.py "https://..." \\')
+        print('    --decrypt-widevine \\')
+        print('    --wvd-path /path/to/device.wvd \\')
+        print('    --widevine-pssh "AAAA..." \\')
+        print('    --widevine-license-url "https://license.example.com/..." \\')
+        print('    --widevine-headers \'{"Authorization": "Bearer xxx"}\'')
+        sys.exit(1)
+
+    # 解析 Headers
+    headers: dict | None = None
+    if args.widevine_headers:
+        try:
+            headers = _json.loads(args.widevine_headers)
+        except _json.JSONDecodeError:
+            print(f"錯誤：--widevine-headers 必須是合法 JSON，例如：")
+            print('  \'{"Authorization": "Bearer xxx", "Origin": "https://example.com"}\'')
+            sys.exit(1)
+
+    # 載入 WVD
+    try:
+        decryptor = WidevineDecryptor(args.wvd_path)
+        print(f"已載入 WVD 裝置：type={decryptor.device_type}, 安全等級=L{decryptor.security_level}")
+    except WvdNotFoundError as e:
+        print(f"錯誤：{e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"錯誤：載入 WVD 失敗：{e}")
+        sys.exit(1)
+
+    url = args.urls[0]
+    output_dir = args.output_dir
+    output_name = args.filename or "widevine_output"
+    fmt = args.format if args.format in ("mp3", "m4a") else "mp3"
+
+    ytdlp_path = find_ytdlp()
+
+    print(f"\n開始 Widevine 解密下載流程...")
+    print(f"  URL        ：{url}")
+    print(f"  輸出目錄   ：{os.path.abspath(output_dir)}")
+    print(f"  輸出格式   ：{fmt}")
+
+    result = decryptor.full_pipeline(
+        url=url,
+        pssh=args.widevine_pssh,
+        license_url=args.widevine_license_url,
+        output_dir=output_dir,
+        output_name=output_name,
+        headers=headers,
+        format=fmt,
+        ytdlp_path=ytdlp_path,
+        keep_encrypted=False,
+    )
+
+    print()
+    if result["success"]:
+        print(f"成功  輸出檔案：{result['output_file']}")
+        content_keys = [k for k in result.get("keys", []) if k["type"] == "CONTENT"]
+        if content_keys:
+            print(f"使用金鑰   ：{content_keys[0]['kid']}:{content_keys[0]['key']}")
+    else:
+        print(f"失敗  {result.get('error', '未知錯誤')}")
+        sys.exit(1)
+
+
 def main():
     """主程式"""
     parser = argparse.ArgumentParser(
@@ -311,8 +423,8 @@ def main():
 
     parser.add_argument(
         "urls",
-        nargs="+",
-        help="要下載的媒體 URL（可指定多個）"
+        nargs="*",
+        help="要下載的媒體 URL（可指定多個；使用 --detect-drm 時可省略）"
     )
 
     parser.add_argument(
@@ -350,7 +462,69 @@ def main():
         help="強制使用 yt-dlp（用於 YouTube 等平台）"
     )
 
+    # ── Widevine 解密選項（研究用途）──────────────────────────────────────────
+    widevine_group = parser.add_argument_group(
+        "Widevine 解密（研究用途）",
+        "解密 Widevine DRM 保護的媒體內容，需自備 WVD device file。"
+    )
+    widevine_group.add_argument(
+        "--decrypt-widevine",
+        action="store_true",
+        dest="decrypt_widevine",
+        help="啟用 Widevine DRM 解密流程（需搭配 --wvd-path、--widevine-pssh、--widevine-license-url）"
+    )
+    widevine_group.add_argument(
+        "--wvd-path",
+        dest="wvd_path",
+        default="tools/widevine_downloader/samsung_l3.wvd",
+        metavar="PATH",
+        help="Widevine Device (.wvd) 檔案路徑（預設 tools/widevine_downloader/samsung_l3.wvd）"
+    )
+    widevine_group.add_argument(
+        "--widevine-pssh",
+        dest="widevine_pssh",
+        default=None,
+        metavar="BASE64",
+        help="Widevine PSSH data（Base64）：可從瀏覽器 EME Logger userscript 取得"
+    )
+    widevine_group.add_argument(
+        "--widevine-license-url",
+        dest="widevine_license_url",
+        default=None,
+        metavar="URL",
+        help="Widevine License Server URL：從瀏覽器 Network 面板搜尋 Widevine 請求取得"
+    )
+    widevine_group.add_argument(
+        "--widevine-headers",
+        dest="widevine_headers",
+        default=None,
+        metavar="JSON",
+        help='License request headers（JSON 格式），例如 \'{"Authorization": "Bearer xxx"}\''
+    )
+    widevine_group.add_argument(
+        "--detect-drm",
+        dest="detect_drm",
+        default=None,
+        metavar="URL",
+        help="偵測 Manifest URL（MPD/M3U8）的 DRM 類型並顯示結果"
+    )
+
     args = parser.parse_args()
+
+    # ── --detect-drm 模式（獨立執行，不做下載）────────────────────────────────
+    if args.detect_drm:
+        _run_detect_drm(args.detect_drm)
+        return
+
+    # ── --decrypt-widevine 模式 ────────────────────────────────────────────────
+    if args.decrypt_widevine:
+        _run_widevine_decrypt(args)
+        return
+
+    # 一般下載：確認有提供 URL
+    if not args.urls:
+        print("錯誤：請提供至少一個 URL，或使用 --detect-drm <URL> 偵測 DRM 類型。")
+        sys.exit(1)
 
     # 執行下載
     print(f"開始下載 {len(args.urls)} 個媒體檔案...")
