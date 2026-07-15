@@ -395,6 +395,35 @@ pip install --upgrade yt-dlp
 yt-dlp --rm-cache-dir
 ```
 
+### YouTube 下載失敗：`n challenge solving failed` / 只抓得到縮圖
+
+**現象**：
+
+```
+WARNING: [youtube] xxxxx: n challenge solving failed: Some formats may be missing.
+WARNING: Only images are available for download. use --list-formats to see them
+ERROR: [youtube] xxxxx: Requested format is not available.
+```
+
+**原因**：YouTube 對播放連結加了一層「n 參數」JS 加密挑戰，yt-dlp 需要本機安裝 JS runtime（Node.js 或 Deno）才能解出真正可用的影音網址。若機器上沒有可用的 JS runtime，yt-dlp 只能拿到縮圖，導致指定的 `mp4`／`m4a` 格式全部找不到。
+
+**排除步驟**（2026-07-13 實測有效）：
+
+1. 確認 yt-dlp 是最新版：`pip install -U yt-dlp`（若已是最新版，此步驟不會解決問題，需繼續下一步）
+2. 安裝 Deno 作為 JS challenge solver：
+
+```bash
+brew install deno
+```
+
+3. 安裝完成後 **重新開一個終端機視窗**（讓新 shell 讀到含 `deno` 的 PATH），yt-dlp 不需要加任何參數就會自動偵測並使用 Deno：
+
+```
+[youtube] [jsc:deno] Solving JS challenges using deno
+```
+
+看到這行代表 n challenge 已成功解開，下載會恢復正常。
+
 ### Claude Desktop 無法連接 MCP Server
 
 1. 確認 `claude_desktop_config.json` 中的路徑正確（絕對路徑）

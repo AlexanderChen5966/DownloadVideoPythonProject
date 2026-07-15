@@ -256,7 +256,7 @@ python download_cli.py \
   --widevine-headers '{"customdata":"<新的 customdata>","origin":"https://viewer-ebook.books.com.tw","referer":"https://viewer-ebook.books.com.tw/"}' \
   -f mp3
 ```
-
+<新的 customdata>，<> 是多餘的，JSON 值不需要也不能包角括號。把 "<...>" 改成 "..." 即可
 ---
 
 ### 方式 D：實體 Android 裝置 + Frida

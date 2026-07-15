@@ -3,8 +3,8 @@
 **優先級：** Low（研究性功能）
 **建立日期：** 2026-06-30
 **完成日期：** 2026-06-30
-**狀態：** ✅ 程式碼已完成，WVD 取得方式待突破
-**影響路徑：** `tools/widevine_downloader/`（新增模組）、`server.py`、`download_cli.py`、`docs/shared/dash_stream_download_notes.md`
+**狀態：** ✅ 完整流程已驗證（VideoHelp WVD + 博客來實測成功）
+**影響路徑：** `tools/widevine_downloader/`（新增模組）、`download_cli.py`、`docs/shared/dash_stream_download_notes.md`
 
 ---
 
@@ -32,7 +32,6 @@
 | 檔案 | 修改內容 |
 |------|---------|
 | `download_cli.py` | 新增 `--decrypt-widevine`、`--wvd-path`、`--widevine-pssh`、`--widevine-license-url`、`--widevine-headers`、`--detect-drm` |
-| `server.py` | 新增 `status://widevine` resource、`download_media_widevine` tool、`detect_drm` tool |
 | `requirements.txt` | 新增 `pywidevine>=1.9.0` |
 
 ### CLI 使用方式
@@ -102,8 +101,8 @@ HTTP 403
 ```
 
 - Token **每次頁面載入重新產生**，有效期 1 小時
-- SecurityLevel=1 要求，可能會拒絕 L3 CDM（但 audio 軌道不一定強制）
-- 從瀏覽器 Network 面板 → 搜尋 `Widevine` → Request Headers → `customdata` 欄位取得
+- SecurityLevel=1 要求 → **實測 L3 CDM 未被拒絕**（audio-only 軌道未強制執行）
+- 從瀏覽器 Network 面板 → 搜尋 `widevine.keyos.com` → Request Headers → `customdata` 欄位取得
 
 ---
 
@@ -140,84 +139,57 @@ Chrome 瀏覽器有自己內建的 Widevine CDM，**不經過** Android 系統�
 
 ---
 
-### 方式 B：WidevineProxy2 + Remote CDM（待測試）
+### 方式 B：WidevineProxy2 + Remote CDM（已不需要）
 
 **工具：** [DevLARLEY/WidevineProxy2](https://github.com/DevLARLEY/WidevineProxy2)
 
-WidevineProxy2 **不是 WVD 提取工具**，而是金鑰攔截器：
-- 在瀏覽器播放 DRM 內容時攔截 License 交換
-- 需載入 WVD 或 Remote CDM 才能運作
-- 直接輸出 `kid:key` 格式的 Content Key
-
-**Remote CDM 模式（不需自備 WVD）：**
-
-```
-1. 下載官方提供的 remote.json：
-   https://github.com/user-attachments/files/21834836/remote.json
-
-2. WidevineProxy2 擴充功能 → 右上角選 Remote CDM
-   → Choose remote.json → 勾選 Enabled
-
-3. 開啟博客來書本頁面並播放
-
-4. 擴充功能 Keys 欄位出現 kid:key 後
-   → 用 mp4decrypt 解密下載的加密檔
-```
-
-> 若此 Remote CDM 被博客來 KeyOS 拒絕（L1 要求），需改用實體 Android 裝置提取的 WVD。
+WidevineProxy2 是金鑰攔截器，Remote CDM 模式可不需自備 WVD。
+實測 Remote CDM 無反應，且方式 C 已成功，不再嘗試。
 
 ---
 
-### 方式 C：videohelp.com 現成 WVD（待嘗試）
+### 方式 C：videohelp.com 現成 WVD ✅ 成功
 
-[forum.videohelp.com/forums/48](https://forum.videohelp.com/forums/48) 有社群分享的 L3 WVD 檔案。
-缺點：可能已被特定 License Server 封鎖。
+下載自 [VideoHelp Real Device L3 CDMs](https://forum.videohelp.com/threads/417425-Real-Device-L3-Cdms)
+
+**WVD 檔案：** `tools/widevine_downloader/samsung_l3.wvd`
+**來源裝置：** Samsung SM-A125F, Android 16, L3 (22589)
+
+**博客來實測結果（2026-06-30）：**
+
+| 步驟 | 結果 |
+|------|------|
+| License Server | `https://widevine.keyos.com/api/v4/getLicense` → ✅ 接受 L3 CDM |
+| Content Key | `bb1c06725b132bec4a3b74a1fe8495b4:f49790e9cdba77de9139c2299df0c809` |
+| 解密 + 轉 MP3 | 5 分 13 秒音訊，244 kbps，播放正常 |
+
+**SecurityLevel=1 驗證：** KeyOS 雖標示 L1 要求，但 L3 CDM 仍成功取得 Content Key（audio-only 未強制執行）。
 
 ---
 
-### 方式 D：實體 Android 裝置 + Frida（最可靠但最複雜）
+### 方式 D：實體 Android 裝置 + Frida（備用）
 
-使用真實 Android 手機（已 root 或可用 `adb root`）：
-
-```bash
-# 啟動 frida-server（對應裝置 CPU 架構版本）
-adb push frida-server /data/local/tmp/
-adb shell chmod 755 /data/local/tmp/frida-server
-adb shell nohup /data/local/tmp/frida-server &
-
-# 在裝置的 YouTube/Netflix App 播放任何 Widevine 內容
-# 執行修正後的 dumper
-PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python python dump_keys.py
-
-# 得到 private_key.pem + client_id.bin 後打包
-pywidevine create-device \
-  --type ANDROID \
-  --security-level 3 \
-  -k private_key.pem \
-  -c client_id.bin \
-  -o device.wvd
-```
-
-**注意：** 需使用修正後的 `dumper/Helpers/script.js`（見方式 A 的修正紀錄）。
+若方式 C 的 WVD 日後被 KeyOS 列入黑名單，再用此方式自行提取。
+完整步驟見 `docs/issues/ISSUE-002-Widevine-WVD-Research.md`。
 
 ---
 
 ## 已知限制與注意事項
 
 1. **M3U8 偵測器漏洞**：只讀 master playlist，不追子播放清單。博客來 HLS 的 FairPlay 被誤判為 none。
-2. **SecurityLevel=1 風險**：博客來要求 L1，L3 CDM 可能被拒（audio 可能例外）。
+2. ~~SecurityLevel=1 風險~~ → **已驗證 L3 CDM 可用**（audio-only 未強制執行）
 3. **customdata 1 小時過期**：每次下載前需重新從瀏覽器取得。
 4. **FairPlay 無法解密**：`skd://` 協定為 Apple 硬體安全，軟體無解。
-5. **WVD 本身不提供**：需使用者自行取得，本專案不附帶任何 L3 provision。
+5. **WVD**：`tools/widevine_downloader/samsung_l3.wvd`（VideoHelp 下載），若遭 KeyOS 封鎖需更換。
 
 ---
 
 ## 後續行動
 
-- [ ] 修正 `drm_detector.py` 的 M3U8 偵測：追入子播放清單讀取 `EXT-X-KEY`
-- [ ] 測試 WidevineProxy2 Remote CDM 對博客來的效果（方式 B）
-- [ ] 若 Remote CDM 失效，嘗試實體 Android 裝置（方式 D）
-- [ ] 確認有 WVD 後，用已完成的 CLI 工具完整測試 `--decrypt-widevine` 流程
+- [x] 修正 `drm_detector.py` 的 M3U8 偵測：追入子播放清單讀取 `EXT-X-KEY`（`drm_detector.py:199-240`）
+- [x] 從 VideoHelp 取得現成 L3 WVD（方式 C ✅ 成功）
+- [x] 用 CLI 工具完整測試 `--decrypt-widevine` 流程（博客來實測通過）
+- [ ] 若 `samsung_l3.wvd` 日後被 KeyOS 封鎖，改用其他 VideoHelp WVD 或方式 D 自行提取
 
 ---
 
@@ -230,6 +202,7 @@ pywidevine create-device \
 | `tools/widevine_downloader/decryptor.py` | pywidevine 封裝 |
 | `tools/widevine_downloader/key_extractor.py` | 金鑰提取互動介面 |
 | `download_cli.py` | CLI 整合（`--decrypt-widevine` 等參數） |
-| `server.py` | MCP tool `download_media_widevine` + `detect_drm` |
 | `requirements.txt` | 新增 `pywidevine>=1.9.0` |
+| `tools/widevine_downloader/samsung_l3.wvd` | VideoHelp 下載的 L3 WVD（Samsung SM-A125F） |
+| `docs/issues/ISSUE-002-Widevine-WVD-Research.md` | WVD 取得方式完整研究紀錄 |
 | `/tmp/opencode/dumper/` | wvdumper 修正版（含 Frida 17.x 相容修正） |
