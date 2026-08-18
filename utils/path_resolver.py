@@ -43,3 +43,27 @@ def get_ytdlp_version() -> dict:
         return {"version": "unknown", "error": str(e)}
     except Exception as e:
         return {"version": "unknown", "error": str(e)}
+
+
+# YouTube player client 優先序。
+# 預設的 android_vr client 取得的媒體網址會被 YouTube 擋下（HTTP 403），
+# 且 ios/mweb 的高畫質 DASH 格式需要 GVS PO Token 才能下載。
+# web_embedded 目前可在無 PO Token、無 cookies 的情況下取得完整格式，
+# 後面兩個作為 fallback，由 yt-dlp 依序嘗試。
+YOUTUBE_PLAYER_CLIENTS = "web_embedded,mweb,default"
+
+
+def is_youtube_url(url: str) -> bool:
+    """判斷是否為 YouTube 網址（含 youtu.be 短網址）"""
+    lowered = url.lower()
+    return "youtube.com" in lowered or "youtu.be" in lowered
+
+
+def youtube_extractor_args(url: str) -> list[str]:
+    """
+    YouTube 網址回傳指定 player client 的 yt-dlp 參數，其他網站回傳空清單。
+    用於繞過 android_vr client 造成的 HTTP 403 Forbidden。
+    """
+    if not is_youtube_url(url):
+        return []
+    return ["--extractor-args", f"youtube:player_client={YOUTUBE_PLAYER_CLIENTS}"]

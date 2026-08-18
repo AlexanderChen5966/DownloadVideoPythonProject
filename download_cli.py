@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from utils.audio_downloader import download_audio_direct
-from utils.path_resolver import find_ytdlp, find_node
+from utils.path_resolver import find_ytdlp, find_node, youtube_extractor_args
 
 
 def needs_ytdlp(url: str) -> bool:
@@ -108,6 +108,7 @@ async def download_with_ytdlp(url: str, output_dir: str, format: str = "mp3") ->
         else:  # best
             cmd.extend(["-f", "best"])
 
+        cmd.extend(youtube_extractor_args(url))
         cmd.append(url)
 
         # 執行下載

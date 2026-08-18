@@ -13,7 +13,20 @@
       "Bash(unzip:*)",
       "Bash(find:*)",
       "Bash(COPYFILE_DISABLE=1 zip:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(yt-dlp:*)",
+      "Bash(node:*)",
+      "Bash(claude:*)",
+      "Bash(bash /Users/alexander/PycharmProjects/DownloadVideoPythonProject/start_mcp.sh)",
+      "Bash(kill %1)",
+      "Bash(echo \"---退出碼 $?---\")",
+      "Bash(echo \"---退出碼: $?---\")",
+      "Bash(.venv/bin/pip show *)",
+      "Bash(.venv/bin/python -m py_compile server.py)",
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(bash start_mcp.sh)",
+      "Bash(.venv/bin/python download_cli.py --help)",
+      "Bash(.venv/bin/python *)"
     ],
     "deny": [],
     "ask": []

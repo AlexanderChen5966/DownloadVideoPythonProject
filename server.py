@@ -24,7 +24,7 @@ from utils.audio_downloader import download_audio_direct
 from utils.whitelist_validator import get_validator
 
 # 導入路徑偵測工具
-from utils.path_resolver import find_ytdlp, find_node
+from utils.path_resolver import find_ytdlp, find_node, youtube_extractor_args
 
 # 導入統一回傳結構
 from utils.response import success_response, error_response
@@ -275,6 +275,7 @@ async def download_media(
                     "--sub-format", "srt/best"
                 ])
 
+            cmd.extend(youtube_extractor_args(url))
             cmd.append(url)
 
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -565,7 +566,7 @@ async def query_formats(url: str) -> dict:
 
     try:
         result = subprocess.run(
-            [yt_dlp_path, "-J", "--no-download", url],
+            [yt_dlp_path, "-J", "--no-download", *youtube_extractor_args(url), url],
             capture_output=True, text=True, timeout=30, check=True
         )
         info = json.loads(result.stdout)
