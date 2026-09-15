@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from utils.audio_downloader import download_audio_direct
-from utils.path_resolver import find_ytdlp, find_node, youtube_extractor_args
+from utils.path_resolver import find_ytdlp, find_node, youtube_extractor_args, filename_cleanup_args
 
 
 def needs_ytdlp(url: str) -> bool:
@@ -89,7 +89,8 @@ async def download_with_ytdlp(url: str, output_dir: str, format: str = "mp3") ->
         node_path = find_node()
         cmd = [
             yt_dlp_path,
-            "-o", f"{output_dir}/%(title)s.%(ext)s"
+            "-o", f"{output_dir}/%(title)s.%(ext)s",
+            *filename_cleanup_args()
         ]
         if node_path:
             cmd[1:1] = ["--js-runtimes", f"node:{node_path}"]

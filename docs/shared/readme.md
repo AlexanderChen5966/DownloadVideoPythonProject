@@ -1,6 +1,6 @@
 # media-downloader MCP — 任務文件索引
 
-> 更新日期：2026-05-19
+> 更新日期：2026-09-15
 
 ## 任務文件狀態索引
 
@@ -10,7 +10,7 @@
 | [p1_unify_error_and_merge_logic.md](./p1_unify_error_and_merge_logic.md) | 統一錯誤結構、合併重複邏輯、修復 SSL | ✅ 已完成 |
 | [p2_progress_history_playlist.md](./p2_progress_history_playlist.md) | 下載進度回報、歷史紀錄、playlist 支援 | ✅ 已完成 |
 | [p3_mcp_resource_prompt_subtitle.md](./p3_mcp_resource_prompt_subtitle.md) | MCP Resource/Prompt、字幕、格式查詢 | ✅ 已完成 |
-| [adjust_audio_volume.md](./adjust_audio_volume.md) | 新增 adjust_audio 工具、音量調整與響度正規化 | ⏳ 待實作 |
+| [adjust_audio_volume.md](./adjust_audio_volume.md) | 新增 adjust_audio 工具、音量調整與響度正規化 | 🔸 部分完成 |
 | [dash_stream_download_notes.md](./dash_stream_download_notes.md) | DASH 串流下載與 DRM 判斷紀錄、工具範圍限制 | 📝 知識紀錄 |
 | [p4_widevine_drm_decryption.md](./p4_widevine_drm_decryption.md) | Widevine DRM 解密下載（研究用途） | ✅ 已完成 |
 
@@ -30,3 +30,4 @@ P0 和 P1 為基礎架構修正，必須按順序完成。P2 和 P3 為功能擴
 | [p1_unify_error_and_merge_logic.md](./p1_unify_error_and_merge_logic.md) | 2026-05-19 | 統一 error_code、SSL fallback、合併重複邏輯 |
 | [p2_progress_history_playlist.md](./p2_progress_history_playlist.md) | 2026-05-19 | 進度回報、下載歷史、playlist 與 --print filepath |
 | [p3_mcp_resource_prompt_subtitle.md](./p3_mcp_resource_prompt_subtitle.md) | 2026-05-19 | 3 Resources、6 Prompts、字幕參數、query_formats 工具 |
+| [adjust_audio_volume.md](./adjust_audio_volume.md) | 2026-09-15（任務 2） | `convert_to_mp3` 的 `normalize` 參數，改用兩趟式 loudnorm 以保留動態；`adjust_audio` 工具仍待實作 |

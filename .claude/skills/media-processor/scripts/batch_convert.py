@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from path_utils import resolve_existing_path
+
 
 def convert_file(input_file, output_dir, format='mp3', quality=2):
     """
@@ -90,9 +92,11 @@ def main():
     args = parser.parse_args()
 
     # 驗證輸入目錄
-    if not Path(args.input_dir).exists():
+    resolved_dir = resolve_existing_path(args.input_dir)
+    if resolved_dir is None:
         print(f"❌ 錯誤: 輸入目錄不存在: {args.input_dir}")
         sys.exit(1)
+    args.input_dir = resolved_dir
 
     # 查找所有音訊檔案
     print(f"🔍 搜尋音訊檔案: {args.input_dir}")

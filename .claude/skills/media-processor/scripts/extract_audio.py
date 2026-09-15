@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from path_utils import resolve_existing_path
+
 
 def extract_audio(input_video, output_audio, format='mp3', quality=2):
     """
@@ -27,10 +29,11 @@ def extract_audio(input_video, output_audio, format='mp3', quality=2):
         SystemExit: 提取失敗時
     """
     # 驗證輸入檔案
-    input_path = Path(input_video)
-    if not input_path.exists():
+    resolved = resolve_existing_path(input_video)
+    if resolved is None:
         print(f"❌ 錯誤: 找不到輸入檔案 {input_video}")
         sys.exit(1)
+    input_path = Path(resolved)
 
     # 建立輸出目錄
     output_path = Path(output_audio)

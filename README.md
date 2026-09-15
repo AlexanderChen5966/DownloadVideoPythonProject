@@ -43,8 +43,7 @@
 - **格式查詢**：下載前查詢可用畫質和字幕語言
 - **HLS 串流下載**：下載 `.m3u8` 串流並自動轉為 MP4
 - **Podcast 下載**：支援 RSS Feed 解析和直接音檔連結
-- **格式轉換**：使用 FFmpeg 轉換為 MP3（可同步進行響度正規化）
-- **音量調整**：支援固定增益、EBU R128 響度正規化、動態正規化
+- **格式轉換**：使用 FFmpeg 轉換為 MP3，可選擇同步進行 EBU R128 響度正規化
 - **圖片下載**：下載圖片並轉換為 JPG
 - **網路白名單**：限制下載來源，防止誤操作
 - **自動修復**：每次啟動自動更新 yt-dlp、補裝套件、清除快取
@@ -212,34 +211,6 @@ https://example.com/stream/index.m3u8
 
 Agent 會自動讀取 `data://download-history` Resource，回傳最近 20 筆紀錄。
 
-### 調整音檔音量
-
-```
-把這個音檔音量調大：./downloads/podcast_ep1.mp3
-```
-
-Agent 會呼叫 `adjust_audio`，預設使用 `loudnorm` 模式（EBU R128 響度正規化），覆蓋原檔。
-
-```
-把 lecture.m4a 音量調成 3 倍
-```
-
-Agent 使用 `mode="volume", volume_multiplier=3.0` 處理。
-
-```
-把 video.mp4 轉成 MP3，順便把音量正規化
-```
-
-Agent 呼叫 `convert_to_mp3(normalize=True)`，轉換與正規化一步完成。
-
-#### 三種模式說明
-
-| mode | 適合情境 |
-|------|---------|
-| `loudnorm`（預設） | 整體音量偏小，調整至廣播 / Podcast 標準（-23 LUFS） |
-| `volume` | 快速倍增，`volume_multiplier=2.0` 即加倍 |
-| `dynaudnorm` | 音量忽大忽小，動態拉平整體音量 |
-
 ### 診斷 MCP 狀態
 
 ```
@@ -250,19 +221,20 @@ Agent 呼叫 `convert_to_mp3(normalize=True)`，轉換與正規化一步完成�
 
 ---
 
-## MCP 工具一覽（9 個）
+## MCP 工具一覽（8 個）
 
 | 工具 | 說明 |
 |------|------|
 | `download_media` | yt-dlp 下載影音，支援 playlist、字幕、進度回報、歷史跳過 |
-| `convert_to_mp3` | FFmpeg 轉換音視頻為 MP3（可加 `normalize=True` 同步正規化） |
+| `convert_to_mp3` | FFmpeg 轉換音視頻為 MP3（可加 `normalize=True` 做 EBU R128 響度正規化） |
 | `download_and_convert_image` | 下載圖片並轉換為 JPG |
 | `podcast_downloader` | Podcast 下載（RSS Feed 或直接音檔連結） |
 | `download_hls_tool` | HLS (.m3u8) 串流下載並轉為 MP4 |
 | `direct_download_audio` | 純 HTTP 下載音檔（不依賴 yt-dlp） |
 | `whitelist_manage` | 白名單查詢、新增、移除、啟用/停用 |
 | `query_formats` | 查詢 URL 可用的影片格式與字幕語言 |
-| `adjust_audio` | 調整音檔音量（固定增益 / EBU R128 響度正規化 / 動態正規化） |
+
+> **規劃中（尚未實作）**：音量調整工具 `adjust_audio`（對既有音檔調整音量）。設計細節見 [P4 任務文件](docs/shared/adjust_audio_volume.md)。
 
 ## MCP Resources（3 個，不佔工具位）
 
@@ -364,11 +336,12 @@ DownloadVideoPythonProject/
 ├── utils/
 │   ├── audio_downloader.py      # 音檔直接下載（SSL fallback）
 │   ├── download_history.py      # 下載歷史紀錄管理
-│   ├── path_resolver.py         # yt-dlp / Node.js 路徑動態偵測
+│   ├── path_resolver.py         # yt-dlp / Node.js 路徑偵測、YouTube player client、檔名清洗參數
 │   ├── response.py              # 統一回傳結構（success_response / error_response）
 │   ├── whitelist_validator.py   # 白名單驗證
 │   ├── rss_parser.py            # RSS Feed 解析
-│   └── sanitizer.py             # 檔名清洗
+│   ├── loudnorm.py              # 兩趟式 EBU R128 響度正規化
+│   └── sanitizer.py             # 檔名清洗、Unicode 正規化與路徑還原
 ├── docs/
 │   ├── shared/                  # 需求文件（P0–P3 全部完成）
 │   ├── guides/                  # 使用指南（白名單、HLS）
@@ -423,6 +396,35 @@ brew install deno
 ```
 
 看到這行代表 n challenge 已成功解開，下載會恢復正常。
+
+### 檔案明明存在，轉檔卻說找不到
+
+**現象**：`ls` 列得出檔案，但照著螢幕把檔名打一次就失敗：
+
+```
+ls: 睡前故事 EP143 《我從哪裡來？》 生命教育｜兒童性教育｜家庭生活.mp4: No such file or directory
+```
+
+**原因**：影片標題夾帶 NBSP（U+00A0）等不可見空白，寫進檔名後與半形空格完全無法分辨。用 `repr()` 即可現形：
+
+```bash
+python3 -c "import os; [print(repr(f)) for f in os.listdir('.')]"
+```
+
+**處理**：2026-09-15 起下載時已自動清洗，新檔案不會再有此問題（**需重啟 MCP server**）。此日期之前下載的舊檔案檔名仍帶不可見字元，但 `convert_to_mp3` 與 media-processor 技能腳本已能自動比對還原，可直接沿用。完整分析見 [ISSUE-004](docs/issues/ISSUE-004-Invisible-Whitespace-In-Filenames.md)。
+
+### 轉檔後音檔長度大幅縮短（大寫副檔名 `.MP3`）
+
+**現象**：對 `.MP3`（大寫）檔案轉檔後，原始檔案內容大量消失，但工具回報成功：
+
+```
+轉檔前: 2760832 bytes, 600.0 秒
+轉檔後:   32262 bytes,   6.9 秒
+```
+
+**原因**：macOS 檔案系統不分大小寫，`song.MP3` 與 `song.mp3` 是同一個檔案，舊版以字串比較無法判斷，導致 FFmpeg 同時讀寫同一檔案。
+
+**處理**：2026-09-15 起已改用 `os.path.samefile()` 判斷，不會再發生（**需重啟 MCP server**）。**已受損的檔案無法復原**，若先前曾對大寫副檔名的 MP3 轉檔，請檢查長度並從原始來源重新取得。完整分析見 [ISSUE-005](docs/issues/ISSUE-005-Case-Insensitive-Path-Comparison-Data-Loss.md)。
 
 ### Claude Desktop 無法連接 MCP Server
 

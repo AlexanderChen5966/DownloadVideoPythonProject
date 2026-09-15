@@ -3,6 +3,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from utils.sanitizer import INVISIBLE_CHARS, LOOKALIKE_SPACES
+
 
 def find_ytdlp() -> str:
     """
@@ -51,6 +53,19 @@ def get_ytdlp_version() -> dict:
 # web_embedded 目前可在無 PO Token、無 cookies 的情況下取得完整格式，
 # 後面兩個作為 fallback，由 yt-dlp 依序嘗試。
 YOUTUBE_PLAYER_CLIENTS = "web_embedded,mweb,default"
+
+
+def filename_cleanup_args() -> list[str]:
+    """
+    讓 yt-dlp 在套用 -o 樣板前先洗掉標題裡的不可見空白與零寬字元。
+
+    影片標題常夾帶 NBSP（U+00A0），輸出的檔名看起來和半形空格一模一樣，
+    後續照著檔名打路徑會找不到檔案，也讓 shell 補完失效。
+    """
+    return [
+        "--replace-in-metadata", "title", f"[{LOOKALIKE_SPACES}]", " ",
+        "--replace-in-metadata", "title", f"[{INVISIBLE_CHARS}]", "",
+    ]
 
 
 def is_youtube_url(url: str) -> bool:

@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from path_utils import resolve_existing_path
+
 
 def convert_to_mp3(input_file, output_file, quality=2):
     """
@@ -25,10 +27,11 @@ def convert_to_mp3(input_file, output_file, quality=2):
         SystemExit: 轉換失敗時
     """
     # 驗證輸入檔案
-    input_path = Path(input_file)
-    if not input_path.exists():
+    resolved = resolve_existing_path(input_file)
+    if resolved is None:
         print(f"❌ 錯誤: 找不到輸入檔案 {input_file}")
         sys.exit(1)
+    input_path = Path(resolved)
 
     # 建立輸出目錄
     output_path = Path(output_file)

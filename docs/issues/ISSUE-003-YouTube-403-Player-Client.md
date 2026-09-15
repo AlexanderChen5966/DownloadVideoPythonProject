@@ -113,6 +113,7 @@ utils/path_resolver.py       # player client helper
 server.py                    # MCP download_media / 格式查詢
 download_cli.py              # CLI 下載
 docs/issues/ISSUE-001-MCP-Auto-Repair.md   # 另一類失敗形態（版本過舊）
+docs/issues/ISSUE-004-Invisible-Whitespace-In-Filenames.md   # 同樣出在 yt-dlp 指令組裝，但壞在下載之後
 ```
 
 ## 參考資料

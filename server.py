@@ -24,10 +24,17 @@ from utils.audio_downloader import download_audio_direct
 from utils.whitelist_validator import get_validator
 
 # 導入路徑偵測工具
-from utils.path_resolver import find_ytdlp, find_node, youtube_extractor_args
+from utils.path_resolver import find_ytdlp, find_node, youtube_extractor_args, filename_cleanup_args
 
 # 導入統一回傳結構
 from utils.response import success_response, error_response
+from utils.sanitizer import resolve_existing_path, normalize_unicode_filename
+from utils.loudnorm import (
+    measure_loudness,
+    build_loudnorm_filter,
+    LoudnormError,
+    OUTPUT_SAMPLE_RATE,
+)
 
 # 導入下載歷史紀錄
 from utils.download_history import is_downloaded, add_record
@@ -249,7 +256,8 @@ async def download_media(
                 "--remote-components", "ejs:github",
                 "--yes-playlist",
                 "-o", f"{output_dir}/%(title)s.%(ext)s",
-                "--print", "after_move:filepath"
+                "--print", "after_move:filepath",
+                *filename_cleanup_args()
             ]
             if node_path:
                 cmd[1:1] = ["--js-runtimes", f"node:{node_path}"]
@@ -319,7 +327,8 @@ async def download_media(
 async def convert_to_mp3(
     input_file: str,
     output_file: str = None,
-    quality: int = 2
+    quality: int = 2,
+    normalize: bool = False
 ) -> dict:
     """
     使用 FFmpeg 將音視頻檔案轉換為 MP3 格式
@@ -328,37 +337,66 @@ async def convert_to_mp3(
         input_file: 要轉換的輸入檔案路徑（支援 mp4, wav, m4a, webm 等）
         output_file: 輸出的 MP3 檔案路徑（選填，預設為輸入檔名改 .mp3）
         quality: 音質等級 0-9，0 最高品質，9 最低品質
+        normalize: 是否套用 EBU R128 響度正規化（兩趟式，目標 -23 LUFS），
+                   讓多集音檔響度一致；直接從來源一次編碼，不會多掉一代音質
 
     Returns:
         轉換結果字典，包含成功狀態、檔案路徑和檔案大小
     """
-    if not os.path.exists(input_file):
+    resolved = resolve_existing_path(input_file)
+    if resolved is None:
         return error_response("FILE_NOT_FOUND", f"輸入檔案不存在: {input_file}", input_file=input_file)
+    input_file = resolved
 
     if output_file is None:
-        output_file = str(Path(input_file).with_suffix('.mp3'))
+        source = Path(input_file)
+        output_file = str(source.with_name(normalize_unicode_filename(source.stem) + ".mp3"))
 
-    if input_file.lower().endswith('.mp3') and input_file == output_file:
+    # 必須用 samefile 而非字串比較：macOS 預設的檔案系統不分大小寫，
+    # song.MP3 與 song.mp3 是同一個檔案，字串比較會讓 FFmpeg 同時讀寫同一檔案而毀損內容
+    in_place = os.path.exists(output_file) and os.path.samefile(input_file, output_file)
+
+    if not normalize and in_place and input_file.lower().endswith('.mp3'):
         return success_response(message="檔案已經是 MP3 格式", input_file=input_file, output_file=output_file)
+
+    audio_filter = None
+    if normalize:
+        try:
+            audio_filter = build_loudnorm_filter(measure_loudness(input_file))
+        except LoudnormError as e:
+            return error_response("NORMALIZE_FAILED", str(e), input_file=input_file)
+
+    # FFmpeg 無法就地覆寫，輸出與輸入為同一檔案時先寫暫存檔再置換
+    target = f"{output_file}.tmp.mp3" if in_place else output_file
 
     try:
         cmd = [
             "ffmpeg", "-i", input_file,
             "-vn", "-codec:a", "libmp3lame",
-            "-qscale:a", str(quality), "-y",
-            output_file
+            "-qscale:a", str(quality)
         ]
+        if audio_filter:
+            cmd.extend(["-af", audio_filter, "-ar", str(OUTPUT_SAMPLE_RATE)])
+        cmd.extend(["-y", target])
+
         subprocess.run(cmd, capture_output=True, text=True, check=True)
+        if in_place:
+            os.replace(target, output_file)
+
         return success_response(
             input_file=input_file,
             output_file=output_file,
             quality=quality,
+            normalized=normalize,
             file_size=os.path.getsize(output_file)
         )
     except subprocess.CalledProcessError as e:
         return error_response("CONVERSION_FAILED", str(e), stderr=e.stderr)
     except Exception as e:
         return error_response("UNKNOWN_ERROR", str(e))
+    finally:
+        if in_place and os.path.exists(target):
+            os.remove(target)
 
 
 @mcp.tool()
