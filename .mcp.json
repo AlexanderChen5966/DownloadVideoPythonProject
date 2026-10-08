@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "media-downloader": {
+      "type": "stdio",
+      "command": "/bin/bash",
+      "args": [
+        "/Users/alexander/PycharmProjects/DownloadVideoPythonProject/start_mcp.sh"
+      ],
+      "env": {}
+    }
+  }
+}

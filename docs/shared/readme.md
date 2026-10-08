@@ -1,6 +1,6 @@
 # media-downloader MCP — 任務文件索引
 
-> 更新日期：2026-09-15
+> 更新日期：2026-09-29
 
 ## 任務文件狀態索引
 
@@ -13,6 +13,8 @@
 | [adjust_audio_volume.md](./adjust_audio_volume.md) | 新增 adjust_audio 工具、音量調整與響度正規化 | 🔸 部分完成 |
 | [dash_stream_download_notes.md](./dash_stream_download_notes.md) | DASH 串流下載與 DRM 判斷紀錄、工具範圍限制 | 📝 知識紀錄 |
 | [p4_widevine_drm_decryption.md](./p4_widevine_drm_decryption.md) | Widevine DRM 解密下載（研究用途） | ✅ 已完成 |
+| [p5_ebook_downloader.md](./p5_ebook_downloader.md) | 電子書按章節下載離線包（教學用，MCP＋CLI） | ⏳ 待實作 |
+| [p6_audiobook_downloader.md](./p6_audiobook_downloader.md) | 有聲書多來源按章節分檔下載（自有 manifest＋公開 RSS） | ⏳ 待實作 |
 
 ## 執行順序
 

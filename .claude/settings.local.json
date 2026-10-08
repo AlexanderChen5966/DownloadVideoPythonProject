@@ -31,5 +31,8 @@
     "deny": [],
     "ask": []
   },
-  "outputStyle": "default"
+  "outputStyle": "default",
+  "disabledMcpjsonServers": [
+    "media-downloader"
+  ]
 }
